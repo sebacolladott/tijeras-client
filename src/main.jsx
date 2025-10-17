@@ -60,7 +60,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import {
-  Form as UIForm,
+  Form,
   FormField,
   FormItem,
   FormLabel,
@@ -68,10 +68,38 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Badge } from "@/components/ui/badge";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from "@/components/ui/drawer";
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSeparator,
+  FieldSet,
+  FieldTitle,
+} from "@/components/ui/field";
 
 import { useUserStore } from "@/stores/userStore";
 
 const API = "http://localhost:3000/api";
+
+// ------------ Schemas ------------
+const changeSchema = z.object({
+  oldPassword: z.string().min(6, "Mínimo 6 caracteres"),
+  newPassword: z.string().min(6, "Mínimo 6 caracteres"),
+});
 
 // ------------ Axios ------------
 const http = axios.create({
@@ -101,12 +129,30 @@ function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, clearUser } = useUserStore();
+  const [isChangingOpen, setIsChangingOpen] = useState(false);
 
-  const isActive = (path) => {
-    if (path === "/") return location.pathname === "/";
-    return (
-      location.pathname === path || location.pathname.startsWith(path + "/")
-    );
+  const isActive = (path) =>
+    path === "/"
+      ? location.pathname === "/"
+      : location.pathname.startsWith(path);
+
+  // Form hook con zod
+  const changeForm = useForm({
+    resolver: zodResolver(changeSchema),
+    defaultValues: { oldPassword: "", newPassword: "" },
+  });
+
+  const changePass = async (values) => {
+    try {
+      await api("/auth/change-password", {
+        method: "POST",
+        body: values,
+      });
+      changeForm.reset();
+      setIsChangingOpen(false);
+    } catch (e) {
+      console.error(e.message);
+    }
   };
 
   const logout = async () => {
@@ -116,78 +162,78 @@ function AppSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild>
-              <div className="flex items-center gap-2">
-                <div className="flex justify-center items-center bg-sidebar-primary rounded-lg size-8 aspect-square text-sidebar-primary-foreground">
-                  <img
-                    src="/tijeras.webp"
-                    alt="Icono"
-                    className="w-8 h-8 object-contain"
-                  />
+    <>
+      <Sidebar>
+        <SidebarHeader>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton size="lg" asChild>
+                <div className="flex items-center gap-2">
+                  <div className="flex justify-center items-center bg-sidebar-primary rounded-lg size-8">
+                    <img
+                      src="/tijeras.webp"
+                      alt="Icono"
+                      className="w-8 h-8 object-contain"
+                    />
+                  </div>
+                  <div className="flex-1 grid text-sm text-left leading-tight">
+                    <span className="font-bullettokilla font-medium truncate">
+                      Tijeras
+                    </span>
+                    <span className="text-xs truncate">{user?.email}</span>
+                  </div>
                 </div>
-                <div className="flex-1 grid text-sm text-left leading-tight">
-                  <span className="font-bullettokilla font-medium truncate">
-                    Tijeras
-                  </span>
-                  <span className="text-xs truncate">{user?.email}</span>
-                </div>
-              </div>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Application</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive("/dashboard/barbers")}
-                >
-                  <Link to="/dashboard/barbers">Barberos</Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive("/dashboard/clients")}
-                >
-                  <Link to="/dashboard/clients">Clientes</Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={isActive("/dashboard/cuts")}
-                >
-                  <Link to="/dashboard/cuts">Cortes</Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarHeader>
+
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Aplicación</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/dashboard/barbers")}
+                  >
+                    <Link to="/dashboard/barbers">Barberos</Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/dashboard/clients")}
+                  >
+                    <Link to="/dashboard/clients">Clientes</Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={isActive("/dashboard/cuts")}
+                  >
+                    <Link to="/dashboard/cuts">Cortes</Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
               <Button
                 variant="ghost"
                 className="justify-start w-full"
-                onClick={logout}
+                onClick={() => setIsChangingOpen(true)}
               >
                 Cambiar contraseña
               </Button>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
               <Button
                 variant="ghost"
                 className="justify-start w-full"
@@ -195,12 +241,80 @@ function AppSidebar() {
               >
                 Cerrar sesión
               </Button>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
-      <SidebarRail />
-    </Sidebar>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+
+        <SidebarRail />
+      </Sidebar>
+
+      {/* Drawer para cambio de contraseña */}
+      <Drawer open={isChangingOpen} onOpenChange={setIsChangingOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Cambiar contraseña</DrawerTitle>
+            <DrawerDescription>
+              Ingresá tu contraseña actual y la nueva.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <form
+            id="changingForm"
+            onSubmit={changeForm.handleSubmit(changePass)}
+            className="space-y-6 p-4"
+          >
+            <FieldSet>
+              <FieldLegend>Actualizar contraseña</FieldLegend>
+              <FieldGroup className="flex flex-col gap-4">
+                <Field data-invalid={!!changeForm.formState.errors.oldPassword}>
+                  <FieldLabel htmlFor="oldPassword">
+                    Contraseña actual
+                  </FieldLabel>
+                  <Input
+                    id="oldPassword"
+                    type="password"
+                    {...changeForm.register("oldPassword")}
+                  />
+                  <FieldError>
+                    {changeForm.formState.errors.oldPassword?.message}
+                  </FieldError>
+                </Field>
+
+                <Field data-invalid={!!changeForm.formState.errors.newPassword}>
+                  <FieldLabel htmlFor="newPassword">
+                    Nueva contraseña
+                  </FieldLabel>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    {...changeForm.register("newPassword")}
+                  />
+                  <FieldError>
+                    {changeForm.formState.errors.newPassword?.message}
+                  </FieldError>
+                </Field>
+              </FieldGroup>
+            </FieldSet>
+          </form>
+
+          <DrawerFooter>
+            <Button type="submit" form="changingForm" className="w-full">
+              Actualizar
+            </Button>
+            <DrawerClose asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => setIsChangingOpen(false)}
+              >
+                Cancelar
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </>
   );
 }
 
@@ -395,7 +509,7 @@ function Auth({ mode, user, checking }) {
             {mode === "reset" && "Ingresá el token y tu nueva contraseña"}
           </CardDescription>
         </CardHeader>
-        <UIForm {...form}>
+        <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-3">
               {(mode === "login" ||
@@ -502,60 +616,60 @@ function Auth({ mode, user, checking }) {
               )}
             </CardFooter>
           </form>
-        </UIForm>
+        </Form>
       </Card>
     </div>
   );
 }
 
 // ------------ Dashboard ------------
-function Dashboard({ user, onLogout }) {
-  const [changing, setChanging] = useState(false);
-  const [msg, setMsg] = useState("");
+function Dashboard() {
+  // const [changing, setChanging] = useState(false);
+  // const [msg, setMsg] = useState("");
 
-  const changeSchema = z.object({
-    oldPassword: z.string().min(6, "Mínimo 6 caracteres"),
-    newPassword: z.string().min(6, "Mínimo 6 caracteres"),
-  });
+  // const changeSchema = z.object({
+  //   oldPassword: z.string().min(6, "Mínimo 6 caracteres"),
+  //   newPassword: z.string().min(6, "Mínimo 6 caracteres"),
+  // });
 
-  const changeForm = useForm({
-    resolver: zodResolver(changeSchema),
-    defaultValues: { oldPassword: "", newPassword: "" },
-  });
+  // const changeForm = useForm({
+  //   resolver: zodResolver(changeSchema),
+  //   defaultValues: { oldPassword: "", newPassword: "" },
+  // });
 
-  const changePass = async (values) => {
-    try {
-      await api("/auth/change-password", {
-        method: "POST",
-        body: {
-          oldPassword: values.oldPassword,
-          newPassword: values.newPassword,
-        },
-      });
-      setMsg("Contraseña actualizada correctamente");
-      changeForm.reset();
-      setChanging(false);
-    } catch (e) {
-      setMsg(e.message);
-    }
-  };
+  // const changePass = async (values) => {
+  //   try {
+  //     await api("/auth/change-password", {
+  //       method: "POST",
+  //       body: {
+  //         oldPassword: values.oldPassword,
+  //         newPassword: values.newPassword,
+  //       },
+  //     });
+  //     setMsg("Contraseña actualizada correctamente");
+  //     changeForm.reset();
+  //     setChanging(false);
+  //   } catch (e) {
+  //     setMsg(e.message);
+  //   }
+  // };
 
   return (
     <>
-      <header className="flex justify-between items-center">
+      {/* <header className="flex justify-between items-center">
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={() => setChanging((v) => !v)}>
             Cambiar contraseña
           </Button>
         </div>
-      </header>
+      </header> */}
 
-      {changing && (
+      {/* {changing && (
         <Card className="mt-3">
           <CardHeader>
             <CardTitle>Cambiar contraseña</CardTitle>
           </CardHeader>
-          <UIForm {...changeForm}>
+          <Form {...changeForm}>
             <form onSubmit={changeForm.handleSubmit(changePass)}>
               <CardContent className="gap-3 grid sm:grid-cols-2">
                 <FormField
@@ -597,13 +711,11 @@ function Dashboard({ user, onLogout }) {
                 {msg && <span className="text-sm">{msg}</span>}
               </CardFooter>
             </form>
-          </UIForm>
+          </Form>
         </Card>
-      )}
+      )} */}
 
-      <main className="mt-4">
-        <Outlet />
-      </main>
+      <Outlet />
     </>
   );
 }
@@ -697,7 +809,7 @@ function Crud({ title, entity }) {
         <CardHeader>
           <CardTitle>{editId ? "Editar" : "Agregar"}</CardTitle>
         </CardHeader>
-        <UIForm {...form}>
+        <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="gap-3 grid sm:grid-cols-2">
               <FormField
@@ -765,7 +877,7 @@ function Crud({ title, entity }) {
               <Button type="submit">{editId ? "Guardar" : "Agregar"}</Button>
             </CardFooter>
           </form>
-        </UIForm>
+        </Form>
       </Card>
 
       <Card>
@@ -1008,7 +1120,7 @@ function CutForm({ clients, barbers, onDone }) {
       <CardHeader>
         <CardTitle>Nuevo corte</CardTitle>
       </CardHeader>
-      <UIForm {...form}>
+      <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardContent className="gap-3 grid sm:grid-cols-2">
             <FormField
@@ -1114,7 +1226,7 @@ function CutForm({ clients, barbers, onDone }) {
             <Button type="submit">Agregar</Button>
           </CardFooter>
         </form>
-      </UIForm>
+      </Form>
     </Card>
   );
 }
