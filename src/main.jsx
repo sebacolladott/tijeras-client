@@ -182,6 +182,17 @@ function AppSidebar() {
                 className="justify-start w-full"
                 onClick={logout}
               >
+                Cambiar contraseña
+              </Button>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Button
+                variant="ghost"
+                className="justify-start w-full"
+                onClick={logout}
+              >
                 Cerrar sesión
               </Button>
             </SidebarMenuButton>
