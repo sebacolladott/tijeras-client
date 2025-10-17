@@ -1,0 +1,1418 @@
+// main.jsx
+import React, { useState, useEffect } from "react";
+import ReactDOM from "react-dom/client";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+  Outlet,
+} from "react-router";
+import axios from "axios";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+// shadcn/ui
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarTrigger,
+  SidebarHeader,
+  SidebarContent,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarRail,
+} from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import {
+  Card,
+  CardHeader,
+  CardContent,
+  CardFooter,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import {
+  Table,
+  TableHeader,
+  TableRow,
+  TableHead,
+  TableBody,
+  TableCell,
+} from "@/components/ui/table";
+import {
+  Form as UIForm,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import { Badge } from "@/components/ui/badge";
+
+import { useUserStore } from "@/stores/userStore";
+
+const API = "http://localhost:3000/api";
+
+// ------------ Axios ------------
+const http = axios.create({
+  baseURL: API,
+  withCredentials: true,
+  headers: { "Content-Type": "application/json" },
+});
+http.interceptors.response.use(
+  (res) => res.data,
+  (err) => {
+    const msg =
+      err?.response?.data?.error ||
+      err?.response?.data?.message ||
+      err?.message ||
+      "Error";
+    return Promise.reject(new Error(msg));
+  }
+);
+async function api(path, options = {}) {
+  const method = (options.method || "GET").toLowerCase();
+  const data = options.body ?? undefined;
+  return http.request({ url: path, method, data });
+}
+
+// ------------ AppSidebar ------------
+function AppSidebar() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { user, clearUser } = useUserStore();
+
+  const isActive = (path) => {
+    if (path === "/") return location.pathname === "/";
+    return (
+      location.pathname === path || location.pathname.startsWith(path + "/")
+    );
+  };
+
+  const logout = async () => {
+    await api("/auth/logout", { method: "POST" });
+    clearUser();
+    navigate("/login", { replace: true });
+  };
+
+  return (
+    <Sidebar>
+      <SidebarHeader>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton size="lg" asChild>
+              <div className="flex items-center gap-2">
+                <div className="flex justify-center items-center bg-sidebar-primary rounded-lg size-8 aspect-square text-sidebar-primary-foreground">
+                  <img
+                    src="/tijeras.webp"
+                    alt="Icono"
+                    className="w-8 h-8 object-contain"
+                  />
+                </div>
+                <div className="flex-1 grid text-sm text-left leading-tight">
+                  <span className="font-bullettokilla font-medium truncate">
+                    Tijeras
+                  </span>
+                  <span className="text-xs truncate">{user?.email}</span>
+                </div>
+              </div>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+      <SidebarContent>
+        <SidebarGroup>
+          <SidebarGroupLabel>Application</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive("/dashboard/barbers")}
+                >
+                  <Link to="/dashboard/barbers">Barberos</Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive("/dashboard/clients")}
+                >
+                  <Link to="/dashboard/clients">Clientes</Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActive("/dashboard/cuts")}
+                >
+                  <Link to="/dashboard/cuts">Cortes</Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild>
+              <Button
+                variant="ghost"
+                className="justify-start w-full"
+                onClick={logout}
+              >
+                Cerrar sesión
+              </Button>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+      <SidebarRail />
+    </Sidebar>
+  );
+}
+
+// ------------ App ------------
+function App() {
+  const { user, setUser } = useUserStore();
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const me = await api("/auth/me");
+        setUser(me);
+      } catch {
+        setUser(null);
+      } finally {
+        setChecking(false);
+      }
+    })();
+  }, []);
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            user ? (
+              <Navigate to="/dashboard/barbers" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+
+        {/* Auth */}
+        <Route
+          path="/login"
+          element={<Auth mode="login" user={user} checking={checking} />}
+        />
+        <Route
+          path="/register"
+          element={<Auth mode="register" user={user} checking={checking} />}
+        />
+        <Route
+          path="/reset-request"
+          element={
+            <Auth mode="reset-request" user={user} checking={checking} />
+          }
+        />
+        <Route
+          path="/reset"
+          element={<Auth mode="reset" user={user} checking={checking} />}
+        />
+
+        {/* Dashboard (protected) */}
+        <Route
+          path="/dashboard"
+          element={
+            <Protected user={user} checking={checking}>
+              <SidebarProvider>
+                <AppSidebar />
+                <div className="flex-1">
+                  <div className="p-2">
+                    <SidebarTrigger />
+                  </div>
+                  <Dashboard user={user} onLogout={() => setUser(null)} />
+                </div>
+              </SidebarProvider>
+            </Protected>
+          }
+        >
+          <Route index element={<Navigate to="barbers" replace />} />
+          <Route
+            path="barbers"
+            element={<Crud title="Barberos" entity="barbers" />}
+          />
+          <Route path="barbers/:id" element={<BarberDetailRoute />} />
+          <Route
+            path="clients"
+            element={<Crud title="Clientes" entity="clients" />}
+          />
+          <Route path="clients/:id" element={<ClientDetailRoute />} />
+          <Route path="cuts" element={<Cuts />} />
+          <Route path="cuts/:id" element={<CutDetailRoute />} />
+        </Route>
+
+        <Route path="*" element={<NotFound user={user} />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+// ------------ Protected ------------
+function Protected({ user, checking, children }) {
+  if (checking) return <p className="p-6">Verificando sesión…</p>;
+  if (!user) return <Navigate to="/login" replace />;
+  return children;
+}
+
+// ------------ Auth (Zod + shadcn) ------------
+function Auth({ mode, user, checking }) {
+  const navigate = useNavigate();
+  const { setUser } = useUserStore();
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  useEffect(() => {
+    if (!checking && user) navigate("/dashboard/barbers", { replace: true });
+  }, [user, checking, navigate]);
+
+  const schemas = {
+    login: z.object({
+      email: z.string().email("Email inválido"),
+      password: z.string().min(6, "Mínimo 6 caracteres"),
+    }),
+    register: z.object({
+      email: z.string().email("Email inválido"),
+      password: z.string().min(6, "Mínimo 6 caracteres"),
+    }),
+    "reset-request": z.object({
+      email: z.string().email("Email inválido"),
+    }),
+    reset: z.object({
+      token: z.string().min(1, "El token es obligatorio"),
+      newPassword: z.string().min(6, "Mínimo 6 caracteres"),
+    }),
+  };
+
+  const form = useForm({
+    resolver: zodResolver(schemas[mode]),
+    defaultValues:
+      mode === "reset"
+        ? { token: "", newPassword: "" }
+        : { email: "", password: "" },
+  });
+
+  const onSubmit = async (values) => {
+    try {
+      setError("");
+      setMessage("");
+
+      if (mode === "reset-request") {
+        await api("/auth/request-reset", {
+          method: "POST",
+          body: { email: values.email },
+        });
+        setMessage("Se generó un token (revisá la consola del servidor).");
+        navigate("/reset", { replace: true });
+        return;
+      }
+
+      if (mode === "reset") {
+        await api("/auth/reset-password", {
+          method: "POST",
+          body: { token: values.token, newPassword: values.newPassword },
+        });
+        setMessage("Contraseña restablecida. Ahora podés iniciar sesión.");
+        navigate("/login", { replace: true });
+        return;
+      }
+
+      const data = await api(`/auth/${mode}`, {
+        method: "POST",
+        body: { email: values.email, password: values.password },
+      });
+      setUser(data);
+      navigate("/dashboard/barbers", { replace: true });
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const title =
+    mode === "login"
+      ? "Iniciar sesión"
+      : mode === "register"
+      ? "Registrarse"
+      : mode === "reset-request"
+      ? "Recuperar cuenta"
+      : "Restablecer contraseña";
+
+  return (
+    <div className="mx-auto my-16 max-w-sm">
+      <Card>
+        <CardHeader>
+          <CardTitle>{title}</CardTitle>
+          <CardDescription>
+            {mode === "login" && "Accedé a tu cuenta"}
+            {mode === "register" && "Creá tu cuenta"}
+            {mode === "reset-request" && "Solicitá un token de recuperación"}
+            {mode === "reset" && "Ingresá el token y tu nueva contraseña"}
+          </CardDescription>
+        </CardHeader>
+        <UIForm {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <CardContent className="space-y-3">
+              {(mode === "login" ||
+                mode === "register" ||
+                mode === "reset-request") && (
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input placeholder="usuario@email.com" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {(mode === "login" || mode === "register") && (
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contraseña</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="••••••••"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {mode === "reset" && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="token"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Token</FormLabel>
+                        <FormControl>
+                          <Input placeholder="TOKEN" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="newPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nueva contraseña</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="password"
+                            placeholder="••••••••"
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+
+              {error && <p className="text-red-600 text-sm">{error}</p>}
+              {message && <p className="text-green-600 text-sm">{message}</p>}
+            </CardContent>
+            <CardFooter className="flex flex-col gap-2">
+              <Button type="submit" className="w-full">
+                {mode === "login"
+                  ? "Entrar"
+                  : mode === "register"
+                  ? "Crear cuenta"
+                  : mode === "reset-request"
+                  ? "Enviar enlace"
+                  : "Restablecer"}
+              </Button>
+
+              {mode === "login" && (
+                <>
+                  <Button asChild variant="secondary" className="w-full">
+                    <Link to="/register">Crear cuenta nueva</Link>
+                  </Button>
+                  <Button asChild variant="ghost" className="w-full">
+                    <Link to="/reset-request">Olvidé mi contraseña</Link>
+                  </Button>
+                </>
+              )}
+              {mode === "register" && (
+                <Button asChild variant="ghost" className="w-full">
+                  <Link to="/login">Ya tengo cuenta</Link>
+                </Button>
+              )}
+            </CardFooter>
+          </form>
+        </UIForm>
+      </Card>
+    </div>
+  );
+}
+
+// ------------ Dashboard ------------
+function Dashboard({ user, onLogout }) {
+  const [changing, setChanging] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  const changeSchema = z.object({
+    oldPassword: z.string().min(6, "Mínimo 6 caracteres"),
+    newPassword: z.string().min(6, "Mínimo 6 caracteres"),
+  });
+
+  const changeForm = useForm({
+    resolver: zodResolver(changeSchema),
+    defaultValues: { oldPassword: "", newPassword: "" },
+  });
+
+  const changePass = async (values) => {
+    try {
+      await api("/auth/change-password", {
+        method: "POST",
+        body: {
+          oldPassword: values.oldPassword,
+          newPassword: values.newPassword,
+        },
+      });
+      setMsg("Contraseña actualizada correctamente");
+      changeForm.reset();
+      setChanging(false);
+    } catch (e) {
+      setMsg(e.message);
+    }
+  };
+
+  return (
+    <>
+      <header className="flex justify-between items-center">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setChanging((v) => !v)}>
+            Cambiar contraseña
+          </Button>
+        </div>
+      </header>
+
+      {changing && (
+        <Card className="mt-3">
+          <CardHeader>
+            <CardTitle>Cambiar contraseña</CardTitle>
+          </CardHeader>
+          <UIForm {...changeForm}>
+            <form onSubmit={changeForm.handleSubmit(changePass)}>
+              <CardContent className="gap-3 grid sm:grid-cols-2">
+                <FormField
+                  control={changeForm.control}
+                  name="oldPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contraseña actual</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={changeForm.control}
+                  name="newPassword"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nueva contraseña</FormLabel>
+                      <FormControl>
+                        <Input type="password" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </CardContent>
+              <CardFooter className="gap-2">
+                <Button type="submit">Actualizar</Button>
+                <Button
+                  variant="ghost"
+                  type="button"
+                  onClick={() => setChanging(false)}
+                >
+                  Cancelar
+                </Button>
+                {msg && <span className="text-sm">{msg}</span>}
+              </CardFooter>
+            </form>
+          </UIForm>
+        </Card>
+      )}
+
+      <main className="mt-4">
+        <Outlet />
+      </main>
+    </>
+  );
+}
+
+// ------------ CRUD genérico (Zod + shadcn) ------------
+function Crud({ title, entity }) {
+  const [list, setList] = useState([]);
+  const [editId, setEditId] = useState(null);
+
+  const barberSchema = z.object({
+    name: z.string().min(1, "Obligatorio"),
+    bio: z.string().optional(),
+    phone: z.string().optional(), // ignorado para barbers
+    notes: z.string().optional(), // ignorado para barbers
+  });
+
+  const clientSchema = z.object({
+    name: z.string().min(1, "Obligatorio"),
+    phone: z.string().min(6, "Teléfono inválido").optional(),
+    notes: z.string().optional(),
+    bio: z.string().optional(), // ignorado para clients
+  });
+
+  const schema = entity === "barbers" ? barberSchema : clientSchema;
+
+  const form = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { name: "", bio: "", phone: "", notes: "" },
+  });
+
+  const isBarbers = entity === "barbers";
+  const isClients = entity === "clients";
+  const isPeople = isBarbers || isClients;
+
+  const fetchList = async () => {
+    const data = await api(`/${entity}`);
+    setList(data);
+  };
+
+  useEffect(() => {
+    setEditId(null);
+    form.reset({ name: "", bio: "", phone: "", notes: "" });
+    fetchList();
+  }, [entity]);
+
+  const onSubmit = async (values) => {
+    const payload = {
+      name: values.name,
+      ...(isBarbers ? { bio: values.bio } : {}),
+      ...(isClients ? { phone: values.phone, notes: values.notes } : {}),
+    };
+    const method = editId ? "PUT" : "POST";
+    const path = editId ? `/${entity}/${editId}` : `/${entity}`;
+    await api(path, { method, body: payload });
+    form.reset({ name: "", bio: "", phone: "", notes: "" });
+    setEditId(null);
+    fetchList();
+  };
+
+  const handleEdit = (item) => {
+    setEditId(item.id);
+    form.reset({
+      name: item.name || "",
+      bio: item.bio || "",
+      phone: item.phone || "",
+      notes: item.notes || "",
+    });
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm("¿Eliminar?")) return;
+    await api(`/${entity}/${id}`, { method: "DELETE" });
+    fetchList();
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-lg">{title}</h3>
+        {editId && (
+          <Button
+            variant="ghost"
+            onClick={() => (setEditId(null), form.reset())}
+          >
+            Cancelar edición
+          </Button>
+        )}
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{editId ? "Editar" : "Agregar"}</CardTitle>
+        </CardHeader>
+        <UIForm {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <CardContent className="gap-3 grid sm:grid-cols-2">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem className="sm:col-span-2">
+                    <FormLabel>Nombre</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Nombre" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {isBarbers && (
+                <FormField
+                  control={form.control}
+                  name="bio"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel>Bio</FormLabel>
+                      <FormControl>
+                        <Textarea placeholder="Descripción corta" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {isClients && (
+                <>
+                  <FormField
+                    control={form.control}
+                    name="phone"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Teléfono</FormLabel>
+                        <FormControl>
+                          <Input placeholder="+54 9 ..." {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="notes"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Notas</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Observaciones" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </>
+              )}
+            </CardContent>
+            <CardFooter>
+              <Button type="submit">{editId ? "Guardar" : "Agregar"}</Button>
+            </CardFooter>
+          </form>
+        </UIForm>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nombre</TableHead>
+                {isBarbers && <TableHead>Bio</TableHead>}
+                {isClients && (
+                  <>
+                    <TableHead>Teléfono</TableHead>
+                    <TableHead>Notas</TableHead>
+                  </>
+                )}
+                <TableHead className="w-[140px]">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {list.map((i) => (
+                <TableRow key={i.id}>
+                  <TableCell>
+                    {isPeople ? (
+                      <Link
+                        className="underline"
+                        to={`/dashboard/${entity}/${i.id}`}
+                      >
+                        {i.name}
+                      </Link>
+                    ) : (
+                      i.name
+                    )}
+                  </TableCell>
+                  {isBarbers && <TableCell>{i.bio}</TableCell>}
+                  {isClients && (
+                    <>
+                      <TableCell>{i.phone}</TableCell>
+                      <TableCell>{i.notes}</TableCell>
+                    </>
+                  )}
+                  <TableCell className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleEdit(i)}
+                    >
+                      ✏️
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={() => handleDelete(i.id)}
+                    >
+                      🗑️
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!list.length && (
+                <TableRow>
+                  <TableCell colSpan={isClients ? 5 : isBarbers ? 4 : 3}>
+                    <em>Sin registros.</em>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+// ------------ Cuts (lista + form) ------------
+function Cuts() {
+  const [cuts, setCuts] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [barbers, setBarbers] = useState([]);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    (async () => {
+      const [c, b, ct] = await Promise.all([
+        api("/clients"),
+        api("/barbers"),
+        api("/cuts"),
+      ]);
+      setClients(c);
+      setBarbers(b);
+      setCuts(ct);
+    })();
+  }, []);
+
+  const reload = async () => {
+    const all = await api("/cuts");
+    setCuts(all);
+  };
+
+  return (
+    <section className="space-y-4">
+      <h3 className="font-semibold text-lg">Cortes</h3>
+      <CutForm clients={clients} barbers={barbers} onDone={reload} />
+
+      <Card>
+        <CardContent className="pt-6">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Barbero</TableHead>
+                <TableHead>Estilo</TableHead>
+                <TableHead>Fotos</TableHead>
+                <TableHead className="w-[140px]">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cuts.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    {c.client?.id ? (
+                      <Link
+                        className="underline"
+                        to={`/dashboard/clients/${c.client.id}`}
+                      >
+                        {c.client?.name}
+                      </Link>
+                    ) : (
+                      c.client?.name || "-"
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {c.barber?.id ? (
+                      <Link
+                        className="underline"
+                        to={`/dashboard/barbers/${c.barber.id}`}
+                      >
+                        {c.barber?.name}
+                      </Link>
+                    ) : (
+                      c.barber?.name || "-"
+                    )}
+                  </TableCell>
+                  <TableCell>{c.style}</TableCell>
+                  <TableCell>{c.photos?.length || 0}</TableCell>
+                  <TableCell className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => navigate(`/dashboard/cuts/${c.id}`)}
+                    >
+                      👁️
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={async () => {
+                        if (!confirm("¿Eliminar corte?")) return;
+                        await api(`/cuts/${c.id}`, { method: "DELETE" });
+                        reload();
+                      }}
+                    >
+                      🗑️
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!cuts.length && (
+                <TableRow>
+                  <TableCell colSpan={5}>
+                    <em>Sin cortes registrados.</em>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+function CutForm({ clients, barbers, onDone }) {
+  const photoSchema = z.object({
+    base64: z.string().min(1),
+    mimeType: z.string().min(1),
+  });
+
+  const cutSchema = z.object({
+    clientId: z.string().min(1, "Elegí un cliente"),
+    barberId: z.string().min(1, "Elegí un barbero"),
+    style: z.string().min(1, "Indicá el estilo"),
+    notes: z.string().optional(),
+    photos: z.array(photoSchema).optional(),
+  });
+
+  const form = useForm({
+    resolver: zodResolver(cutSchema),
+    defaultValues: {
+      clientId: "",
+      barberId: "",
+      style: "",
+      notes: "",
+      photos: [],
+    },
+  });
+
+  const handlePhotos = (files) => {
+    const arr = Array.from(files || []);
+    const readers = arr.map(
+      (f) =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (ev) =>
+            resolve({
+              base64: String(ev.target.result).split(",")[1],
+              mimeType: f.type,
+            });
+          reader.readAsDataURL(f);
+        })
+    );
+    Promise.all(readers).then((photos) =>
+      form.setValue("photos", photos, { shouldValidate: true })
+    );
+  };
+
+  const onSubmit = async (values) => {
+    await api("/cuts", { method: "POST", body: values });
+    form.reset({
+      clientId: "",
+      barberId: "",
+      style: "",
+      notes: "",
+      photos: [],
+    });
+    onDone();
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Nuevo corte</CardTitle>
+      </CardHeader>
+      <UIForm {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)}>
+          <CardContent className="gap-3 grid sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="clientId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Cliente</FormLabel>
+                  <FormControl>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Cliente" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map((c) => (
+                          <SelectItem key={c.id} value={String(c.id)}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="barberId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Barbero</FormLabel>
+                  <FormControl>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Barbero" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {barbers.map((b) => (
+                          <SelectItem key={b.id} value={String(b.id)}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="style"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Estilo</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Fade medio, etc." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="notes"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Notas</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Observaciones" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormItem className="sm:col-span-2">
+              <FormLabel>Fotos</FormLabel>
+              <FormControl>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(e) => handlePhotos(e.target.files)}
+                />
+              </FormControl>
+              <p className="text-muted-foreground text-xs">
+                Podés subir varias imágenes.
+              </p>
+            </FormItem>
+          </CardContent>
+          <CardFooter>
+            <Button type="submit">Agregar</Button>
+          </CardFooter>
+        </form>
+      </UIForm>
+    </Card>
+  );
+}
+
+// ------------ CutDetail (route + component) ------------
+function CutDetailRoute() {
+  const { id } = useParams();
+  return <CutDetail id={id} />;
+}
+function CutDetail({ id }) {
+  const navigate = useNavigate();
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      const all = await api("/cuts");
+      const found = all.find((x) => String(x.id) === String(id));
+      setData(found || null);
+    })();
+  }, [id]);
+
+  if (!data) return <p>Cargando…</p>;
+
+  const delPhoto = async (pid) => {
+    if (!confirm("¿Eliminar foto?")) return;
+    await http.delete(`/cuts/${data.id}/photos/${pid}`).catch(() => {});
+    const refreshed = await api("/cuts");
+    setData(refreshed.find((x) => x.id === data.id));
+  };
+
+  return (
+    <section className="space-y-3">
+      <Button variant="ghost" onClick={() => navigate(-1)}>
+        ← Volver
+      </Button>
+      <h3 className="font-semibold text-lg">
+        {data.client?.id ? (
+          <Link
+            className="underline"
+            to={`/dashboard/clients/${data.client.id}`}
+          >
+            {data.client?.name}
+          </Link>
+        ) : (
+          data.client?.name
+        )}{" "}
+        -{" "}
+        {data.barber?.id ? (
+          <Link
+            className="underline"
+            to={`/dashboard/barbers/${data.barber.id}`}
+          >
+            {data.barber?.name}
+          </Link>
+        ) : (
+          data.barber?.name
+        )}
+      </h3>
+      <p className="text-sm">
+        <b>Estilo:</b> {data.style} <br />
+        <b>Notas:</b> {data.notes}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {data.photos?.length ? (
+          data.photos.map((p) => (
+            <div key={p.id} className="relative">
+              <img
+                src={`${API}/cuts/${data.id}/photos/${p.id}/data`}
+                width="200"
+                className="rounded-md object-cover cursor-pointer"
+                onClick={() =>
+                  window.open(
+                    `${API}/cuts/${data.id}/photos/${p.id}/data`,
+                    "_blank"
+                  )
+                }
+              />
+              <Button
+                size="icon"
+                variant="destructive"
+                className="top-1 right-1 absolute w-6 h-6"
+                onClick={() => delPhoto(p.id)}
+                title="Eliminar"
+              >
+                ✕
+              </Button>
+            </div>
+          ))
+        ) : (
+          <em>Sin fotos</em>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ------------ BarberDetail (route + component) ------------
+function BarberDetailRoute() {
+  const { id } = useParams();
+  return <BarberDetail id={id} />;
+}
+function BarberDetail({ id }) {
+  const navigate = useNavigate();
+  const [barber, setBarber] = useState(null);
+  const [cuts, setCuts] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const [barbers, allCuts] = await Promise.all([
+        api("/barbers"),
+        api("/cuts"),
+      ]);
+      setBarber(barbers.find((b) => String(b.id) === String(id)) || null);
+      setCuts(
+        allCuts.filter(
+          (c) =>
+            String(c.barberId) === String(id) ||
+            String(c.barber?.id ?? "") === String(id)
+        )
+      );
+    })();
+  }, [id]);
+
+  if (!barber) return <p>Cargando…</p>;
+
+  return (
+    <section className="space-y-4">
+      <Button variant="ghost" onClick={() => navigate(-1)}>
+        ← Volver
+      </Button>
+      <h3 className="font-semibold text-lg">{barber.name}</h3>
+      {barber.bio && <p className="text-sm">{barber.bio}</p>}
+
+      <p className="text-sm">
+        <b>Cantidad de cortes:</b> {cuts.length}
+      </p>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cortes de {barber.name}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Cliente</TableHead>
+                <TableHead>Estilo</TableHead>
+                <TableHead>Fotos</TableHead>
+                <TableHead>Ver</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cuts.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    {c.client?.id ? (
+                      <Link
+                        className="underline"
+                        to={`/dashboard/clients/${c.client.id}`}
+                      >
+                        {c.client?.name}
+                      </Link>
+                    ) : (
+                      c.client?.name || "-"
+                    )}
+                  </TableCell>
+                  <TableCell>{c.style}</TableCell>
+                  <TableCell>{c.photos?.length || 0}</TableCell>
+                  <TableCell>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={`/dashboard/cuts/${c.id}`}>👁️</Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!cuts.length && (
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    <em>Sin cortes registrados para este barbero.</em>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+// ------------ ClientDetail (route + component) ------------
+function ClientDetailRoute() {
+  const { id } = useParams();
+  return <ClientDetail id={id} />;
+}
+function ClientDetail({ id }) {
+  const navigate = useNavigate();
+  const [client, setClient] = useState(null);
+  const [cuts, setCuts] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      const [clients, allCuts] = await Promise.all([
+        api("/clients"),
+        api("/cuts"),
+      ]);
+      setClient(clients.find((c) => String(c.id) === String(id)) || null);
+      setCuts(
+        allCuts.filter(
+          (c) =>
+            String(c.clientId) === String(id) ||
+            String(c.client?.id ?? "") === String(id)
+        )
+      );
+    })();
+  }, [id]);
+
+  if (!client) return <p>Cargando…</p>;
+
+  return (
+    <section className="space-y-4">
+      <Button variant="ghost" onClick={() => navigate(-1)}>
+        ← Volver
+      </Button>
+      <h3 className="font-semibold text-lg">{client.name}</h3>
+      <p className="text-sm">
+        {client.phone && (
+          <>
+            <b>Teléfono:</b> {client.phone}
+            <br />
+          </>
+        )}
+        {client.notes && (
+          <>
+            <b>Notas:</b> {client.notes}
+          </>
+        )}
+      </p>
+
+      <p className="text-sm">
+        <b>Cantidad de cortes:</b> {cuts.length}
+      </p>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Cortes de {client.name}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Barbero</TableHead>
+                <TableHead>Estilo</TableHead>
+                <TableHead>Fotos</TableHead>
+                <TableHead>Ver</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {cuts.map((c) => (
+                <TableRow key={c.id}>
+                  <TableCell>
+                    {c.barber?.id ? (
+                      <Link
+                        className="underline"
+                        to={`/dashboard/barbers/${c.barber.id}`}
+                      >
+                        {c.barber?.name}
+                      </Link>
+                    ) : (
+                      c.barber?.name || "-"
+                    )}
+                  </TableCell>
+                  <TableCell>{c.style}</TableCell>
+                  <TableCell>{c.photos?.length || 0}</TableCell>
+                  <TableCell>
+                    <Button asChild size="sm" variant="outline">
+                      <Link to={`/dashboard/cuts/${c.id}`}>👁️</Link>
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {!cuts.length && (
+                <TableRow>
+                  <TableCell colSpan={4}>
+                    <em>Sin cortes registrados para este cliente.</em>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </section>
+  );
+}
+
+// ------------ NotFound ------------
+function NotFound({ user }) {
+  return (
+    <div className="p-6">
+      <h3 className="font-semibold text-lg">404</h3>
+      <p>Página no encontrada.</p>
+      <div className="mt-3">
+        <Button asChild>
+          <Link to={user ? "/dashboard/barbers" : "/login"}>Volver</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
