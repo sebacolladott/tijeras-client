@@ -101,6 +101,19 @@ const changeSchema = z.object({
   newPassword: z.string().min(6, "Mínimo 6 caracteres"),
 });
 
+const photoSchema = z.object({
+  base64: z.string().min(1),
+  mimeType: z.string().min(1),
+});
+
+const cutSchema = z.object({
+  clientId: z.string().min(1, "Elegí un cliente"),
+  barberId: z.string().min(1, "Elegí un barbero"),
+  style: z.string().min(1, "Indicá el estilo"),
+  notes: z.string().optional(),
+  photos: z.array(photoSchema).optional(),
+});
+
 // ------------ Axios ------------
 const http = axios.create({
   baseURL: API,
@@ -956,6 +969,7 @@ function Cuts() {
   const [cuts, setCuts] = useState([]);
   const [clients, setClients] = useState([]);
   const [barbers, setBarbers] = useState([]);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -978,9 +992,12 @@ function Cuts() {
 
   return (
     <section className="space-y-4">
-      <h3 className="font-semibold text-lg">Cortes</h3>
-      <CutForm clients={clients} barbers={barbers} onDone={reload} />
+      <div className="flex items-center justify-between">
+        <h3 className="font-semibold text-lg">Cortes</h3>
+        <Button onClick={() => setIsDrawerOpen(true)}>Nuevo corte</Button>
+      </div>
 
+      {/* Tabla */}
       <Card>
         <CardContent className="pt-6">
           <Table>
@@ -1055,24 +1072,32 @@ function Cuts() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Drawer con formulario */}
+      <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Nuevo corte</DrawerTitle>
+            <DrawerDescription>
+              Completá los datos para registrar un nuevo corte.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <CutForm
+            clients={clients}
+            barbers={barbers}
+            onDone={() => {
+              reload();
+              setIsDrawerOpen(false);
+            }}
+          />
+        </DrawerContent>
+      </Drawer>
     </section>
   );
 }
 
 function CutForm({ clients, barbers, onDone }) {
-  const photoSchema = z.object({
-    base64: z.string().min(1),
-    mimeType: z.string().min(1),
-  });
-
-  const cutSchema = z.object({
-    clientId: z.string().min(1, "Elegí un cliente"),
-    barberId: z.string().min(1, "Elegí un barbero"),
-    style: z.string().min(1, "Indicá el estilo"),
-    notes: z.string().optional(),
-    photos: z.array(photoSchema).optional(),
-  });
-
   const form = useForm({
     resolver: zodResolver(cutSchema),
     defaultValues: {
@@ -1105,129 +1130,93 @@ function CutForm({ clients, barbers, onDone }) {
 
   const onSubmit = async (values) => {
     await api("/cuts", { method: "POST", body: values });
-    form.reset({
-      clientId: "",
-      barberId: "",
-      style: "",
-      notes: "",
-      photos: [],
-    });
+    form.reset();
     onDone();
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Nuevo corte</CardTitle>
-      </CardHeader>
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <CardContent className="gap-3 grid sm:grid-cols-2">
-            <FormField
-              control={form.control}
-              name="clientId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Cliente</FormLabel>
-                  <FormControl>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Cliente" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {clients.map((c) => (
-                          <SelectItem key={c.id} value={String(c.id)}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+    <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-6">
+      <FieldSet>
+        <FieldLegend>Datos del corte</FieldLegend>
+        <FieldGroup className="flex flex-col gap-4">
+          <Field data-invalid={!!form.formState.errors.clientId}>
+            <FieldLabel>Cliente</FieldLabel>
+            <Select
+              onValueChange={(v) => form.setValue("clientId", v)}
+              defaultValue={form.watch("clientId")}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccioná un cliente" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldError>{form.formState.errors.clientId?.message}</FieldError>
+          </Field>
 
-            <FormField
-              control={form.control}
-              name="barberId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Barbero</FormLabel>
-                  <FormControl>
-                    <Select
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Barbero" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {barbers.map((b) => (
-                          <SelectItem key={b.id} value={String(b.id)}>
-                            {b.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <Field data-invalid={!!form.formState.errors.barberId}>
+            <FieldLabel>Barbero</FieldLabel>
+            <Select
+              onValueChange={(v) => form.setValue("barberId", v)}
+              defaultValue={form.watch("barberId")}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Seleccioná un barbero" />
+              </SelectTrigger>
+              <SelectContent>
+                {barbers.map((b) => (
+                  <SelectItem key={b.id} value={String(b.id)}>
+                    {b.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <FieldError>{form.formState.errors.barberId?.message}</FieldError>
+          </Field>
 
-            <FormField
-              control={form.control}
-              name="style"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Estilo</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Fade medio, etc." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <Field data-invalid={!!form.formState.errors.style}>
+            <FieldLabel>Estilo</FieldLabel>
+            <Input placeholder="Fade medio, etc." {...form.register("style")} />
+            <FieldError>{form.formState.errors.style?.message}</FieldError>
+          </Field>
 
-            <FormField
-              control={form.control}
-              name="notes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Notas</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Observaciones" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+          <Field>
+            <FieldLabel>Notas</FieldLabel>
+            <Input placeholder="Observaciones" {...form.register("notes")} />
+          </Field>
 
-            <FormItem className="sm:col-span-2">
-              <FormLabel>Fotos</FormLabel>
-              <FormControl>
-                <Input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handlePhotos(e.target.files)}
-                />
-              </FormControl>
-              <p className="text-muted-foreground text-xs">
-                Podés subir varias imágenes.
-              </p>
-            </FormItem>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit">Agregar</Button>
-          </CardFooter>
-        </form>
-      </Form>
-    </Card>
+          <Field>
+            <FieldLabel>Fotos</FieldLabel>
+            <Input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => handlePhotos(e.target.files)}
+            />
+            <FieldDescription>Podés subir varias imágenes.</FieldDescription>
+          </Field>
+        </FieldGroup>
+      </FieldSet>
+
+      <CardFooter className="flex gap-2">
+        <Button type="submit" className="w-full">
+          Agregar
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => form.reset()}
+        >
+          Limpiar
+        </Button>
+      </CardFooter>
+    </form>
   );
 }
 
