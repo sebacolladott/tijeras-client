@@ -32,6 +32,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarRail,
+  SidebarInset,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -92,6 +93,17 @@ import {
 } from "@/components/ui/field";
 
 import { useUserStore } from "@/stores/userStore";
+import {
+  CameraIcon,
+  EyeIcon,
+  LogOutIcon,
+  Pencil,
+  PencilIcon,
+  PlusIcon,
+  RectangleEllipsisIcon,
+  Trash2Icon,
+} from "lucide-react";
+import ComboboxCreate from "./components/ComboboxCreate";
 
 const API = "http://localhost:3000/api";
 
@@ -116,7 +128,7 @@ const cutSchema = z.object({
 
 // ------------ Axios ------------
 const http = axios.create({
-  baseURL: API,
+  baseURL: "/api",
   withCredentials: true,
   headers: { "Content-Type": "application/json" },
 });
@@ -238,22 +250,16 @@ function AppSidebar() {
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <Button
-                variant="ghost"
-                className="justify-start w-full"
-                onClick={() => setIsChangingOpen(true)}
-              >
+              <SidebarMenuButton onClick={() => setIsChangingOpen(true)}>
+                <RectangleEllipsisIcon />
                 Cambiar contraseña
-              </Button>
+              </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <Button
-                variant="ghost"
-                className="justify-start w-full"
-                onClick={logout}
-              >
+              <SidebarMenuButton onClick={logout}>
+                <LogOutIcon />
                 Cerrar sesión
-              </Button>
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
@@ -390,12 +396,9 @@ function App() {
             <Protected user={user} checking={checking}>
               <SidebarProvider>
                 <AppSidebar />
-                <div className="flex-1">
-                  <div className="p-2">
-                    <SidebarTrigger />
-                  </div>
+                <SidebarInset className="flex-1 bg-gradient-to-br from-background to-primary/10 overflow-auto text-foreground">
                   <Dashboard user={user} onLogout={() => setUser(null)} />
-                </div>
+                </SidebarInset>
               </SidebarProvider>
             </Protected>
           }
@@ -637,98 +640,13 @@ function Auth({ mode, user, checking }) {
 
 // ------------ Dashboard ------------
 function Dashboard() {
-  // const [changing, setChanging] = useState(false);
-  // const [msg, setMsg] = useState("");
-
-  // const changeSchema = z.object({
-  //   oldPassword: z.string().min(6, "Mínimo 6 caracteres"),
-  //   newPassword: z.string().min(6, "Mínimo 6 caracteres"),
-  // });
-
-  // const changeForm = useForm({
-  //   resolver: zodResolver(changeSchema),
-  //   defaultValues: { oldPassword: "", newPassword: "" },
-  // });
-
-  // const changePass = async (values) => {
-  //   try {
-  //     await api("/auth/change-password", {
-  //       method: "POST",
-  //       body: {
-  //         oldPassword: values.oldPassword,
-  //         newPassword: values.newPassword,
-  //       },
-  //     });
-  //     setMsg("Contraseña actualizada correctamente");
-  //     changeForm.reset();
-  //     setChanging(false);
-  //   } catch (e) {
-  //     setMsg(e.message);
-  //   }
-  // };
-
   return (
     <>
-      {/* <header className="flex justify-between items-center">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setChanging((v) => !v)}>
-            Cambiar contraseña
-          </Button>
-        </div>
-      </header> */}
+      <div className="flex flex-col space-y-4 p-4 h-dvh">
+        <SidebarTrigger />
 
-      {/* {changing && (
-        <Card className="mt-3">
-          <CardHeader>
-            <CardTitle>Cambiar contraseña</CardTitle>
-          </CardHeader>
-          <Form {...changeForm}>
-            <form onSubmit={changeForm.handleSubmit(changePass)}>
-              <CardContent className="gap-3 grid sm:grid-cols-2">
-                <FormField
-                  control={changeForm.control}
-                  name="oldPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contraseña actual</FormLabel>
-                      <FormControl>
-                        <Input type="password" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={changeForm.control}
-                  name="newPassword"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nueva contraseña</FormLabel>
-                      <FormControl>
-                        <Input type="password" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </CardContent>
-              <CardFooter className="gap-2">
-                <Button type="submit">Actualizar</Button>
-                <Button
-                  variant="ghost"
-                  type="button"
-                  onClick={() => setChanging(false)}
-                >
-                  Cancelar
-                </Button>
-                {msg && <span className="text-sm">{msg}</span>}
-              </CardFooter>
-            </form>
-          </Form>
-        </Card>
-      )} */}
-
-      <Outlet />
+        <Outlet />
+      </div>
     </>
   );
 }
@@ -964,14 +882,41 @@ function Crud({ title, entity }) {
   );
 }
 
-// ------------ Cuts (lista + form) ------------
+// ------------ Cuts ------------
 function Cuts() {
   const [cuts, setCuts] = useState([]);
   const [clients, setClients] = useState([]);
   const [barbers, setBarbers] = useState([]);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [openAdd, setOpenAdd] = useState(false);
+  const [openEdit, setOpenEdit] = useState(false);
+  const [selectedCut, setSelectedCut] = useState(null);
   const navigate = useNavigate();
 
+  // ---------------- Form crear ----------------
+  const form = useForm({
+    resolver: zodResolver(cutSchema),
+    defaultValues: {
+      clientId: "",
+      barberId: "",
+      style: "",
+      notes: "",
+      photos: [],
+    },
+  });
+
+  // ---------------- Form editar ----------------
+  const formEdit = useForm({
+    resolver: zodResolver(cutSchema),
+    defaultValues: {
+      clientId: "",
+      barberId: "",
+      style: "",
+      notes: "",
+      photos: [],
+    },
+  });
+
+  // ---------------- Fetch inicial ----------------
   useEffect(() => {
     (async () => {
       const [c, b, ct] = await Promise.all([
@@ -985,129 +930,11 @@ function Cuts() {
     })();
   }, []);
 
+  // ---------------- Helpers ----------------
   const reload = async () => {
     const all = await api("/cuts");
     setCuts(all);
   };
-
-  return (
-    <section className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-lg">Cortes</h3>
-        <Button onClick={() => setIsDrawerOpen(true)}>Nuevo corte</Button>
-      </div>
-
-      {/* Tabla */}
-      <Card>
-        <CardContent className="pt-6">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Barbero</TableHead>
-                <TableHead>Estilo</TableHead>
-                <TableHead>Fotos</TableHead>
-                <TableHead className="w-[140px]">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cuts.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>
-                    {c.client?.id ? (
-                      <Link
-                        className="underline"
-                        to={`/dashboard/clients/${c.client.id}`}
-                      >
-                        {c.client?.name}
-                      </Link>
-                    ) : (
-                      c.client?.name || "-"
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {c.barber?.id ? (
-                      <Link
-                        className="underline"
-                        to={`/dashboard/barbers/${c.barber.id}`}
-                      >
-                        {c.barber?.name}
-                      </Link>
-                    ) : (
-                      c.barber?.name || "-"
-                    )}
-                  </TableCell>
-                  <TableCell>{c.style}</TableCell>
-                  <TableCell>{c.photos?.length || 0}</TableCell>
-                  <TableCell className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => navigate(`/dashboard/cuts/${c.id}`)}
-                    >
-                      👁️
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={async () => {
-                        if (!confirm("¿Eliminar corte?")) return;
-                        await api(`/cuts/${c.id}`, { method: "DELETE" });
-                        reload();
-                      }}
-                    >
-                      🗑️
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!cuts.length && (
-                <TableRow>
-                  <TableCell colSpan={5}>
-                    <em>Sin cortes registrados.</em>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Drawer con formulario */}
-      <Drawer open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Nuevo corte</DrawerTitle>
-            <DrawerDescription>
-              Completá los datos para registrar un nuevo corte.
-            </DrawerDescription>
-          </DrawerHeader>
-
-          <CutForm
-            clients={clients}
-            barbers={barbers}
-            onDone={() => {
-              reload();
-              setIsDrawerOpen(false);
-            }}
-          />
-        </DrawerContent>
-      </Drawer>
-    </section>
-  );
-}
-
-function CutForm({ clients, barbers, onDone }) {
-  const form = useForm({
-    resolver: zodResolver(cutSchema),
-    defaultValues: {
-      clientId: "",
-      barberId: "",
-      style: "",
-      notes: "",
-      photos: [],
-    },
-  });
 
   const handlePhotos = (files) => {
     const arr = Array.from(files || []);
@@ -1131,95 +958,324 @@ function CutForm({ clients, barbers, onDone }) {
   const onSubmit = async (values) => {
     await api("/cuts", { method: "POST", body: values });
     form.reset();
-    onDone();
+    reload();
+    setOpenAdd(false);
   };
 
+  const onInvalid = (err) => console.error("Errores:", err);
+
+  // ---------------- Crear cliente/barbero inline ----------------
+  const createClientInline = async (name) => {
+    const newClient = await api("/clients", {
+      method: "POST",
+      body: { name },
+    });
+    setClients((prev) => [...prev, newClient]);
+    return { value: String(newClient.id), label: newClient.name };
+  };
+
+  const createBarberInline = async (name) => {
+    const newBarber = await api("/barbers", {
+      method: "POST",
+      body: { name },
+    });
+    setBarbers((prev) => [...prev, newBarber]);
+    return { value: String(newBarber.id), label: newBarber.name };
+  };
+
+  // ---------------- Editar corte ----------------
+  const openEditDrawer = (cut) => {
+    setSelectedCut(cut);
+    formEdit.reset({
+      clientId: String(cut.clientId || ""),
+      barberId: String(cut.barberId || ""),
+      style: cut.style || "",
+      notes: cut.notes || "",
+      photos: cut.photos || [],
+    });
+    setOpenEdit(true);
+  };
+
+  const submitUpdateCut = async (values) => {
+    if (!selectedCut) return;
+    await api(`/cuts/${selectedCut.id}`, {
+      method: "PUT",
+      body: values,
+    });
+    await reload();
+    setOpenEdit(false);
+  };
+
+  // ---------------- Render ----------------
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-6">
-      <FieldSet>
-        <FieldLegend>Datos del corte</FieldLegend>
-        <FieldGroup className="flex flex-col gap-4">
-          <Field data-invalid={!!form.formState.errors.clientId}>
-            <FieldLabel>Cliente</FieldLabel>
-            <Select
-              onValueChange={(v) => form.setValue("clientId", v)}
-              defaultValue={form.watch("clientId")}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccioná un cliente" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map((c) => (
-                  <SelectItem key={c.id} value={String(c.id)}>
-                    {c.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldError>{form.formState.errors.clientId?.message}</FieldError>
-          </Field>
-
-          <Field data-invalid={!!form.formState.errors.barberId}>
-            <FieldLabel>Barbero</FieldLabel>
-            <Select
-              onValueChange={(v) => form.setValue("barberId", v)}
-              defaultValue={form.watch("barberId")}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Seleccioná un barbero" />
-              </SelectTrigger>
-              <SelectContent>
-                {barbers.map((b) => (
-                  <SelectItem key={b.id} value={String(b.id)}>
-                    {b.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <FieldError>{form.formState.errors.barberId?.message}</FieldError>
-          </Field>
-
-          <Field data-invalid={!!form.formState.errors.style}>
-            <FieldLabel>Estilo</FieldLabel>
-            <Input placeholder="Fade medio, etc." {...form.register("style")} />
-            <FieldError>{form.formState.errors.style?.message}</FieldError>
-          </Field>
-
-          <Field>
-            <FieldLabel>Notas</FieldLabel>
-            <Input placeholder="Observaciones" {...form.register("notes")} />
-          </Field>
-
-          <Field>
-            <FieldLabel>Fotos</FieldLabel>
-            <Input
-              type="file"
-              accept="image/*"
-              multiple
-              onChange={(e) => handlePhotos(e.target.files)}
-            />
-            <FieldDescription>Podés subir varias imágenes.</FieldDescription>
-          </Field>
-        </FieldGroup>
-      </FieldSet>
-
-      <CardFooter className="flex gap-2">
-        <Button type="submit" className="w-full">
-          Agregar
+    <>
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-lg">Cortes</h3>
+        <Button onClick={() => setOpenAdd(true)}>
+          <PlusIcon />
+          Añadir
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={() => form.reset()}
-        >
-          Limpiar
-        </Button>
-      </CardFooter>
-    </form>
+      </div>
+
+      <div className="relative flex-1 mt-6 overflow-hidden">
+        <div className="w-full h-full overflow-auto">
+          <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-4">
+            {cuts.map((c) => (
+              <div
+                key={c.id}
+                className="hover:bg-muted/40 p-4 border rounded-lg transition-colors"
+              >
+                <div className="flex flex-col gap-1">
+                  <h4 className="font-medium text-sm">
+                    {c.client?.id ? (
+                      <Link
+                        to={`/dashboard/clients/${c.client.id}`}
+                        className="hover:underline"
+                      >
+                        {c.client?.name}
+                      </Link>
+                    ) : (
+                      c.client?.name || "Sin cliente"
+                    )}
+                  </h4>
+
+                  <p className="text-muted-foreground text-xs">
+                    {c.barber?.id ? (
+                      <Link
+                        to={`/dashboard/barbers/${c.barber.id}`}
+                        className="hover:underline"
+                      >
+                        {c.barber?.name}
+                      </Link>
+                    ) : (
+                      c.barber?.name || "-"
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex justify-between items-center mt-3 text-muted-foreground text-xs">
+                  <span>{c.style || "Sin estilo"}</span>
+                  <div className="flex items-center gap-1">
+                    <CameraIcon className="w-3 h-3" />
+                    <span>{c.photos?.length || 0}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 mt-3">
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => navigate(`/dashboard/cuts/${c.id}`)}
+                  >
+                    <EyeIcon />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={() => openEditDrawer(c)}
+                  >
+                    <PencilIcon />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="outline"
+                    onClick={async () => {
+                      if (!confirm("¿Eliminar corte?")) return;
+                      await api(`/cuts/${c.id}`, { method: "DELETE" });
+                      reload();
+                    }}
+                  >
+                    <Trash2Icon className="text-destructive" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Drawer crear */}
+      <Drawer open={openAdd} onOpenChange={setOpenAdd}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Nuevo corte</DrawerTitle>
+            <DrawerDescription>
+              Completá los datos para registrar un nuevo corte.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <form
+            id="cutForm"
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="flex-1 space-y-6 p-6 overflow-auto"
+          >
+            <FieldSet>
+              <FieldLegend>Datos del corte</FieldLegend>
+              <FieldGroup className="flex flex-col gap-4">
+                {/* Cliente */}
+                <Field data-invalid={!!form.formState.errors.clientId}>
+                  <FieldLabel>Cliente</FieldLabel>
+                  <ComboboxCreate
+                    value={form.watch("clientId")}
+                    onChange={(v) => form.setValue("clientId", v)}
+                    items={clients.map((c) => ({
+                      value: String(c.id),
+                      label: c.name,
+                    }))}
+                    placeholder="Selecciona o crea…"
+                    onCreate={createClientInline}
+                  />
+                  <FieldError>
+                    {form.formState.errors.clientId?.message}
+                  </FieldError>
+                </Field>
+
+                {/* Barbero */}
+                <Field data-invalid={!!form.formState.errors.barberId}>
+                  <FieldLabel>Barbero</FieldLabel>
+                  <ComboboxCreate
+                    value={form.watch("barberId")}
+                    onChange={(v) => form.setValue("barberId", v)}
+                    items={barbers.map((b) => ({
+                      value: String(b.id),
+                      label: b.name,
+                    }))}
+                    placeholder="Selecciona o crea…"
+                    onCreate={createBarberInline}
+                  />
+                  <FieldError>
+                    {form.formState.errors.barberId?.message}
+                  </FieldError>
+                </Field>
+
+                {/* Estilo */}
+                <Field data-invalid={!!form.formState.errors.style}>
+                  <FieldLabel>Estilo</FieldLabel>
+                  <Input
+                    placeholder="Fade medio, etc."
+                    {...form.register("style")}
+                  />
+                  <FieldError>
+                    {form.formState.errors.style?.message}
+                  </FieldError>
+                </Field>
+
+                {/* Notas */}
+                <Field>
+                  <FieldLabel>Notas</FieldLabel>
+                  <Input
+                    placeholder="Observaciones"
+                    {...form.register("notes")}
+                  />
+                </Field>
+
+                {/* Fotos */}
+                <Field>
+                  <FieldLabel>Fotos</FieldLabel>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => handlePhotos(e.target.files)}
+                  />
+                  <FieldDescription>
+                    Podés subir varias imágenes.
+                  </FieldDescription>
+                </Field>
+              </FieldGroup>
+            </FieldSet>
+          </form>
+
+          <DrawerFooter>
+            <Button type="submit" form="cutAdDForm">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline" onClick={() => form.reset()}>
+                Cancelar
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Drawer editar */}
+      <Drawer open={openEdit} onOpenChange={setOpenEdit}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Editar corte</DrawerTitle>
+            <DrawerDescription>
+              Modificá cliente, barbero, estilo y notas. (Las fotos no se tocan
+              aquí)
+            </DrawerDescription>
+          </DrawerHeader>
+          <form
+            id="cutEditForm"
+            onSubmit={formEdit.handleSubmit(submitUpdateCut, onInvalid)}
+            className="flex-1 space-y-6 p-6 overflow-auto"
+          >
+            <Field data-invalid={!!formEdit.formState.errors.clientId}>
+              <FieldLabel>Cliente</FieldLabel>
+              <ComboboxCreate
+                value={formEdit.watch("clientId")}
+                onChange={(v) => formEdit.setValue("clientId", v)}
+                items={clients.map((c) => ({
+                  value: String(c.id),
+                  label: c.name,
+                }))}
+                placeholder="Selecciona o crea…"
+                onCreate={createClientInline}
+              />
+              <FieldError>
+                {formEdit.formState.errors.clientId?.message}
+              </FieldError>
+            </Field>
+
+            <Field data-invalid={!!formEdit.formState.errors.barberId}>
+              <FieldLabel>Barbero</FieldLabel>
+              <ComboboxCreate
+                value={formEdit.watch("barberId")}
+                onChange={(v) => formEdit.setValue("barberId", v)}
+                items={barbers.map((b) => ({
+                  value: String(b.id),
+                  label: b.name,
+                }))}
+                placeholder="Selecciona o crea…"
+                onCreate={createBarberInline}
+              />
+              <FieldError>
+                {formEdit.formState.errors.barberId?.message}
+              </FieldError>
+            </Field>
+
+            <Field data-invalid={!!form.formState.errors.style}>
+              <FieldLabel>Estilo</FieldLabel>
+              <Input
+                placeholder="Fade medio, etc."
+                {...formEdit.register("style")}
+              />
+            </Field>
+
+            <Field>
+              <FieldLabel>Notas</FieldLabel>
+              <Input {...formEdit.register("notes")} />
+            </Field>
+          </form>
+          <DrawerFooter>
+            <Button type="submit" form="cutEditForm">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline" onClick={() => form.reset()}>
+                Cancelar
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </>
   );
 }
-
 // ------------ CutDetail (route + component) ------------
 function CutDetailRoute() {
   const { id } = useParams();
