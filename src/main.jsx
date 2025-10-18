@@ -16,6 +16,7 @@ import axios from "axios";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { Toaster } from "@/components/ui/sonner";
 
 // shadcn/ui
 import {
@@ -37,13 +38,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
 import {
   Card,
   CardHeader,
@@ -68,7 +62,6 @@ import {
   FormControl,
   FormMessage,
 } from "@/components/ui/form";
-import { Badge } from "@/components/ui/badge";
 import {
   Drawer,
   DrawerClose,
@@ -94,16 +87,18 @@ import {
 
 import { useUserStore } from "@/stores/userStore";
 import {
+  ArrowLeftIcon,
   CameraIcon,
   EyeIcon,
   LogOutIcon,
-  Pencil,
   PencilIcon,
   PlusIcon,
   RectangleEllipsisIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import ComboboxCreate from "./components/ComboboxCreate";
+import { toast } from "sonner";
 
 const API = "http://localhost:3000/api";
 
@@ -404,22 +399,17 @@ function App() {
           }
         >
           <Route index element={<Navigate to="barbers" replace />} />
-          <Route
-            path="barbers"
-            element={<Crud title="Barberos" entity="barbers" />}
-          />
-          <Route path="barbers/:id" element={<BarberDetailRoute />} />
-          <Route
-            path="clients"
-            element={<Crud title="Clientes" entity="clients" />}
-          />
-          <Route path="clients/:id" element={<ClientDetailRoute />} />
+          <Route path="barbers" element={<Barbers />} />
+          <Route path="barbers/:id" element={<BarberDetail />} />
+          <Route path="clients" element={<Clients />} />
+          <Route path="clients/:id" element={<ClientDetail />} />
           <Route path="cuts" element={<Cuts />} />
-          <Route path="cuts/:id" element={<CutDetailRoute />} />
+          <Route path="cuts/:id" element={<CutDetail />} />
         </Route>
 
         <Route path="*" element={<NotFound user={user} />} />
       </Routes>
+      <Toaster />
     </BrowserRouter>
   );
 }
@@ -431,7 +421,7 @@ function Protected({ user, checking, children }) {
   return children;
 }
 
-// ------------ Auth (Zod + shadcn) ------------
+// ------------ Auth ------------
 function Auth({ mode, user, checking }) {
   const navigate = useNavigate();
   const { setUser } = useUserStore();
@@ -882,18 +872,135 @@ function Crud({ title, entity }) {
   );
 }
 
+function Barbers() {
+  const [barbers, setBarbers] = useState([]);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const form = useForm({
+    resolver: zodResolver(
+      z.object({
+        name: z.string().min(1, "Requerido"),
+        bio: z.string().optional(),
+      })
+    ),
+    defaultValues: { name: "", bio: "" },
+  });
+
+  useEffect(() => {
+    (async () => setBarbers(await api("/barbers")))();
+  }, []);
+  const refresh = async () => setBarbers(await api("/barbers"));
+
+  const onSubmit = async (data) => {
+    await api("/barbers", { method: "POST", body: data });
+    form.reset();
+    await refresh();
+    setIsAddOpen(false);
+  };
+
+  const handleDelete = (id) => {
+    toast("¿Eliminar barbero?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () =>
+          await toast.promise(
+            api(`/barbers/${id}`, { method: "DELETE" }).then(refresh),
+            {
+              loading: "Eliminando…",
+              success: "Barbero eliminado",
+              error: "Error al eliminar",
+            }
+          ),
+      },
+    });
+  };
+
+  return (
+    <>
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-lg">Barberos</h3>
+        <Button onClick={() => setIsAddOpen(true)}>
+          <PlusIcon /> Añadir
+        </Button>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {barbers.map((b) => (
+          <div
+            key={b.id}
+            className="border rounded-lg p-4 hover:bg-muted/40 transition"
+          >
+            <h4 className="font-medium text-sm">{b.name}</h4>
+            <p className="text-xs text-muted-foreground">
+              {b.bio || "Sin bio"}
+            </p>
+            <div className="flex justify-end gap-2 mt-3">
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => navigate(`/dashboard/barbers/${b.id}`)}
+              >
+                <EyeIcon />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => handleDelete(b.id)}
+              >
+                <Trash2Icon className="text-destructive" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Nuevo barbero</DrawerTitle>
+          </DrawerHeader>
+          <form
+            id="formAddBarber"
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="p-6 space-y-4"
+          >
+            <Field>
+              <FieldLabel>Nombre</FieldLabel>
+              <Input {...form.register("name")} placeholder="Nombre" />
+              <FieldError>{form.formState.errors.name?.message}</FieldError>
+            </Field>
+            <Field>
+              <FieldLabel>Bio</FieldLabel>
+              <Textarea
+                {...form.register("bio")}
+                placeholder="Descripción corta"
+              />
+            </Field>
+          </form>
+          <DrawerFooter>
+            <Button type="submit" form="formAddBarber">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline">Cancelar</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </>
+  );
+}
+
 // ------------ Cuts ------------
 function Cuts() {
   const [cuts, setCuts] = useState([]);
   const [clients, setClients] = useState([]);
   const [barbers, setBarbers] = useState([]);
-  const [openAdd, setOpenAdd] = useState(false);
-  const [openEdit, setOpenEdit] = useState(false);
-  const [selectedCut, setSelectedCut] = useState(null);
+  const [isAddOpen, setIsAddOpen] = useState(false);
   const navigate = useNavigate();
 
-  // ---------------- Form crear ----------------
-  const form = useForm({
+  const addForm = useForm({
     resolver: zodResolver(cutSchema),
     defaultValues: {
       clientId: "",
@@ -904,198 +1011,149 @@ function Cuts() {
     },
   });
 
-  // ---------------- Form editar ----------------
-  const formEdit = useForm({
-    resolver: zodResolver(cutSchema),
-    defaultValues: {
-      clientId: "",
-      barberId: "",
-      style: "",
-      notes: "",
-      photos: [],
-    },
-  });
-
-  // ---------------- Fetch inicial ----------------
+  // ---------- Datos ----------
   useEffect(() => {
     (async () => {
-      const [c, b, ct] = await Promise.all([
+      const [clientList, barberList, cutList] = await Promise.all([
         api("/clients"),
         api("/barbers"),
         api("/cuts"),
       ]);
-      setClients(c);
-      setBarbers(b);
-      setCuts(ct);
+      setClients(clientList);
+      setBarbers(barberList);
+      setCuts(cutList);
     })();
   }, []);
 
-  // ---------------- Helpers ----------------
-  const reload = async () => {
-    const all = await api("/cuts");
-    setCuts(all);
+  const refreshCuts = async () => {
+    const updatedCuts = await api("/cuts");
+    setCuts(updatedCuts);
   };
 
-  const handlePhotos = (files) => {
-    const arr = Array.from(files || []);
-    const readers = arr.map(
-      (f) =>
+  // ---------- Fotos ----------
+  const handlePhotoUpload = (files) => {
+    const fileArray = Array.from(files || []);
+    const readers = fileArray.map(
+      (file) =>
         new Promise((resolve) => {
           const reader = new FileReader();
-          reader.onload = (ev) =>
+          reader.onload = (e) =>
             resolve({
-              base64: String(ev.target.result).split(",")[1],
-              mimeType: f.type,
+              base64: String(e.target.result).split(",")[1],
+              mimeType: file.type,
+              preview: e.target.result, // URL para mostrar preview
             });
-          reader.readAsDataURL(f);
+          reader.readAsDataURL(file);
         })
     );
-    Promise.all(readers).then((photos) =>
-      form.setValue("photos", photos, { shouldValidate: true })
-    );
-  };
-
-  const onSubmit = async (values) => {
-    await api("/cuts", { method: "POST", body: values });
-    form.reset();
-    reload();
-    setOpenAdd(false);
-  };
-
-  const onInvalid = (err) => console.error("Errores:", err);
-
-  // ---------------- Crear cliente/barbero inline ----------------
-  const createClientInline = async (name) => {
-    const newClient = await api("/clients", {
-      method: "POST",
-      body: { name },
+    Promise.all(readers).then((photos) => {
+      const current = addForm.getValues("photos") || [];
+      addForm.setValue("photos", [...current, ...photos], {
+        shouldValidate: true,
+      });
     });
+  };
+
+  const removePhoto = (index) => {
+    const updated = [...addForm.getValues("photos")];
+    updated.splice(index, 1);
+    addForm.setValue("photos", updated, { shouldValidate: true });
+  };
+
+  // ---------- Crear corte ----------
+  const handleAddCut = async (data) => {
+    await api("/cuts", { method: "POST", body: data });
+    addForm.reset();
+    await refreshCuts();
+    setIsAddOpen(false);
+  };
+
+  // ---------- Crear cliente/barbero ----------
+  const handleCreateClient = async (name) => {
+    const newClient = await api("/clients", { method: "POST", body: { name } });
     setClients((prev) => [...prev, newClient]);
     return { value: String(newClient.id), label: newClient.name };
   };
-
-  const createBarberInline = async (name) => {
-    const newBarber = await api("/barbers", {
-      method: "POST",
-      body: { name },
-    });
+  const handleCreateBarber = async (name) => {
+    const newBarber = await api("/barbers", { method: "POST", body: { name } });
     setBarbers((prev) => [...prev, newBarber]);
     return { value: String(newBarber.id), label: newBarber.name };
   };
 
-  // ---------------- Editar corte ----------------
-  const openEditDrawer = (cut) => {
-    setSelectedCut(cut);
-    formEdit.reset({
-      clientId: String(cut.clientId || ""),
-      barberId: String(cut.barberId || ""),
-      style: cut.style || "",
-      notes: cut.notes || "",
-      photos: cut.photos || [],
+  // ---------- Eliminar corte ----------
+  const handleDeleteCut = (id) => {
+    toast("¿Eliminar corte?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          await toast.promise(
+            (async () => {
+              await api(`/cuts/${id}`, { method: "DELETE" });
+              await refreshCuts();
+            })(),
+            {
+              loading: "Eliminando corte…",
+              success: "Corte eliminado",
+              error: "Error al eliminar corte",
+            }
+          );
+        },
+      },
     });
-    setOpenEdit(true);
   };
 
-  const submitUpdateCut = async (values) => {
-    if (!selectedCut) return;
-    await api(`/cuts/${selectedCut.id}`, {
-      method: "PUT",
-      body: values,
-    });
-    await reload();
-    setOpenEdit(false);
-  };
-
-  // ---------------- Render ----------------
+  // ---------- Render ----------
   return (
     <>
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-lg">Cortes</h3>
-        <Button onClick={() => setOpenAdd(true)}>
-          <PlusIcon />
-          Añadir
+        <Button onClick={() => setIsAddOpen(true)}>
+          <PlusIcon /> Añadir
         </Button>
       </div>
 
-      <div className="relative flex-1 mt-6 overflow-hidden">
-        <div className="w-full h-full overflow-auto">
-          <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-4">
-            {cuts.map((c) => (
-              <div
-                key={c.id}
-                className="hover:bg-muted/40 p-4 border rounded-lg transition-colors"
-              >
-                <div className="flex flex-col gap-1">
-                  <h4 className="font-medium text-sm">
-                    {c.client?.id ? (
-                      <Link
-                        to={`/dashboard/clients/${c.client.id}`}
-                        className="hover:underline"
-                      >
-                        {c.client?.name}
-                      </Link>
-                    ) : (
-                      c.client?.name || "Sin cliente"
-                    )}
-                  </h4>
-
-                  <p className="text-muted-foreground text-xs">
-                    {c.barber?.id ? (
-                      <Link
-                        to={`/dashboard/barbers/${c.barber.id}`}
-                        className="hover:underline"
-                      >
-                        {c.barber?.name}
-                      </Link>
-                    ) : (
-                      c.barber?.name || "-"
-                    )}
-                  </p>
-                </div>
-
-                <div className="flex justify-between items-center mt-3 text-muted-foreground text-xs">
-                  <span>{c.style || "Sin estilo"}</span>
-                  <div className="flex items-center gap-1">
-                    <CameraIcon className="w-3 h-3" />
-                    <span>{c.photos?.length || 0}</span>
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 mt-3">
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => navigate(`/dashboard/cuts/${c.id}`)}
-                  >
-                    <EyeIcon />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => openEditDrawer(c)}
-                  >
-                    <PencilIcon />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={async () => {
-                      if (!confirm("¿Eliminar corte?")) return;
-                      await api(`/cuts/${c.id}`, { method: "DELETE" });
-                      reload();
-                    }}
-                  >
-                    <Trash2Icon className="text-destructive" />
-                  </Button>
-                </div>
+      {/* Listado */}
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {cuts.map((cut) => (
+          <div
+            key={cut.id}
+            className="border rounded-lg p-4 hover:bg-muted/40 transition-colors"
+          >
+            <h4 className="font-medium text-sm">
+              {cut.client?.name || "Sin cliente"}
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              {cut.barber?.name || "-"}
+            </p>
+            <div className="flex justify-between mt-3 text-xs text-muted-foreground">
+              <span>{cut.style || "Sin estilo"}</span>
+              <div className="flex items-center gap-1">
+                <CameraIcon className="w-3 h-3" />
+                <span>{cut.photos?.length || 0}</span>
               </div>
-            ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-3">
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => navigate(`/dashboard/cuts/${cut.id}`)}
+              >
+                <EyeIcon />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => handleDeleteCut(cut.id)}
+              >
+                <Trash2Icon className="text-destructive" />
+              </Button>
+            </div>
           </div>
-        </div>
+        ))}
       </div>
 
-      {/* Drawer crear */}
-      <Drawer open={openAdd} onOpenChange={setOpenAdd}>
+      {/* Drawer: Añadir */}
+      <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Nuevo corte</DrawerTitle>
@@ -1105,58 +1163,58 @@ function Cuts() {
           </DrawerHeader>
 
           <form
-            id="cutForm"
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="flex-1 space-y-6 p-6 overflow-auto"
+            id="formAddCut"
+            onSubmit={addForm.handleSubmit(handleAddCut)}
+            className="p-6 space-y-6 flex-1 overflow-auto"
           >
             <FieldSet>
               <FieldLegend>Datos del corte</FieldLegend>
-              <FieldGroup className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4">
                 {/* Cliente */}
-                <Field data-invalid={!!form.formState.errors.clientId}>
+                <Field data-invalid={!!addForm.formState.errors.clientId}>
                   <FieldLabel>Cliente</FieldLabel>
                   <ComboboxCreate
-                    value={form.watch("clientId")}
-                    onChange={(v) => form.setValue("clientId", v)}
+                    value={addForm.watch("clientId")}
+                    onChange={(v) => addForm.setValue("clientId", v)}
                     items={clients.map((c) => ({
                       value: String(c.id),
                       label: c.name,
                     }))}
                     placeholder="Selecciona o crea…"
-                    onCreate={createClientInline}
+                    onCreate={handleCreateClient}
                   />
                   <FieldError>
-                    {form.formState.errors.clientId?.message}
+                    {addForm.formState.errors.clientId?.message}
                   </FieldError>
                 </Field>
 
                 {/* Barbero */}
-                <Field data-invalid={!!form.formState.errors.barberId}>
+                <Field data-invalid={!!addForm.formState.errors.barberId}>
                   <FieldLabel>Barbero</FieldLabel>
                   <ComboboxCreate
-                    value={form.watch("barberId")}
-                    onChange={(v) => form.setValue("barberId", v)}
+                    value={addForm.watch("barberId")}
+                    onChange={(v) => addForm.setValue("barberId", v)}
                     items={barbers.map((b) => ({
                       value: String(b.id),
                       label: b.name,
                     }))}
                     placeholder="Selecciona o crea…"
-                    onCreate={createBarberInline}
+                    onCreate={handleCreateBarber}
                   />
                   <FieldError>
-                    {form.formState.errors.barberId?.message}
+                    {addForm.formState.errors.barberId?.message}
                   </FieldError>
                 </Field>
 
                 {/* Estilo */}
-                <Field data-invalid={!!form.formState.errors.style}>
+                <Field data-invalid={!!addForm.formState.errors.style}>
                   <FieldLabel>Estilo</FieldLabel>
                   <Input
                     placeholder="Fade medio, etc."
-                    {...form.register("style")}
+                    {...addForm.register("style")}
                   />
                   <FieldError>
-                    {form.formState.errors.style?.message}
+                    {addForm.formState.errors.style?.message}
                   </FieldError>
                 </Field>
 
@@ -1165,108 +1223,55 @@ function Cuts() {
                   <FieldLabel>Notas</FieldLabel>
                   <Input
                     placeholder="Observaciones"
-                    {...form.register("notes")}
+                    {...addForm.register("notes")}
                   />
                 </Field>
 
-                {/* Fotos */}
+                {/* Fotos con preview */}
                 <Field>
                   <FieldLabel>Fotos</FieldLabel>
                   <Input
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={(e) => handlePhotos(e.target.files)}
+                    onChange={(e) => handlePhotoUpload(e.target.files)}
                   />
                   <FieldDescription>
                     Podés subir varias imágenes.
                   </FieldDescription>
+
+                  {/* Previews */}
+                  {addForm.watch("photos")?.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {addForm.watch("photos").map((photo, i) => (
+                        <div key={i} className="relative group">
+                          <img
+                            src={photo.preview}
+                            alt={`Foto ${i + 1}`}
+                            className="w-20 h-20 object-cover rounded-md border"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removePhoto(i)}
+                            className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition"
+                          >
+                            <XIcon className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </Field>
-              </FieldGroup>
+              </div>
             </FieldSet>
           </form>
 
           <DrawerFooter>
-            <Button type="submit" form="cutAdDForm">
+            <Button type="submit" form="formAddCut">
               Guardar
             </Button>
             <DrawerClose asChild>
-              <Button variant="outline" onClick={() => form.reset()}>
-                Cancelar
-              </Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-
-      {/* Drawer editar */}
-      <Drawer open={openEdit} onOpenChange={setOpenEdit}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Editar corte</DrawerTitle>
-            <DrawerDescription>
-              Modificá cliente, barbero, estilo y notas. (Las fotos no se tocan
-              aquí)
-            </DrawerDescription>
-          </DrawerHeader>
-          <form
-            id="cutEditForm"
-            onSubmit={formEdit.handleSubmit(submitUpdateCut, onInvalid)}
-            className="flex-1 space-y-6 p-6 overflow-auto"
-          >
-            <Field data-invalid={!!formEdit.formState.errors.clientId}>
-              <FieldLabel>Cliente</FieldLabel>
-              <ComboboxCreate
-                value={formEdit.watch("clientId")}
-                onChange={(v) => formEdit.setValue("clientId", v)}
-                items={clients.map((c) => ({
-                  value: String(c.id),
-                  label: c.name,
-                }))}
-                placeholder="Selecciona o crea…"
-                onCreate={createClientInline}
-              />
-              <FieldError>
-                {formEdit.formState.errors.clientId?.message}
-              </FieldError>
-            </Field>
-
-            <Field data-invalid={!!formEdit.formState.errors.barberId}>
-              <FieldLabel>Barbero</FieldLabel>
-              <ComboboxCreate
-                value={formEdit.watch("barberId")}
-                onChange={(v) => formEdit.setValue("barberId", v)}
-                items={barbers.map((b) => ({
-                  value: String(b.id),
-                  label: b.name,
-                }))}
-                placeholder="Selecciona o crea…"
-                onCreate={createBarberInline}
-              />
-              <FieldError>
-                {formEdit.formState.errors.barberId?.message}
-              </FieldError>
-            </Field>
-
-            <Field data-invalid={!!form.formState.errors.style}>
-              <FieldLabel>Estilo</FieldLabel>
-              <Input
-                placeholder="Fade medio, etc."
-                {...formEdit.register("style")}
-              />
-            </Field>
-
-            <Field>
-              <FieldLabel>Notas</FieldLabel>
-              <Input {...formEdit.register("notes")} />
-            </Field>
-          </form>
-          <DrawerFooter>
-            <Button type="submit" form="cutEditForm">
-              Guardar
-            </Button>
-            <DrawerClose asChild>
-              <Button variant="outline" onClick={() => form.reset()}>
+              <Button variant="outline" onClick={() => addForm.reset()}>
                 Cancelar
               </Button>
             </DrawerClose>
@@ -1276,12 +1281,10 @@ function Cuts() {
     </>
   );
 }
-// ------------ CutDetail (route + component) ------------
-function CutDetailRoute() {
+
+// ------------ CutDetail ------------
+function CutDetail() {
   const { id } = useParams();
-  return <CutDetail id={id} />;
-}
-function CutDetail({ id }) {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
 
@@ -1293,87 +1296,126 @@ function CutDetail({ id }) {
     })();
   }, [id]);
 
-  if (!data) return <p>Cargando…</p>;
+  if (!data) return <p className="text-sm text-muted-foreground">Cargando…</p>;
 
-  const delPhoto = async (pid) => {
-    if (!confirm("¿Eliminar foto?")) return;
-    await http.delete(`/cuts/${data.id}/photos/${pid}`).catch(() => {});
-    const refreshed = await api("/cuts");
-    setData(refreshed.find((x) => x.id === data.id));
+  const delPhoto = (pid) => {
+    toast("¿Eliminar foto?", {
+      description: "Esta acción no se puede deshacer.",
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          await toast.promise(
+            (async () => {
+              await http.delete(`/cuts/${data.id}/photos/${pid}`);
+              const refreshed = await api("/cuts");
+              setData(refreshed.find((x) => x.id === data.id));
+            })(),
+            {
+              loading: "Eliminando foto…",
+              success: "Foto eliminada correctamente",
+              error: "No se pudo eliminar la foto",
+            }
+          );
+        },
+      },
+    });
   };
 
   return (
-    <section className="space-y-3">
-      <Button variant="ghost" onClick={() => navigate(-1)}>
-        ← Volver
-      </Button>
-      <h3 className="font-semibold text-lg">
-        {data.client?.id ? (
-          <Link
-            className="underline"
-            to={`/dashboard/clients/${data.client.id}`}
-          >
-            {data.client?.name}
-          </Link>
-        ) : (
-          data.client?.name
-        )}{" "}
-        -{" "}
-        {data.barber?.id ? (
-          <Link
-            className="underline"
-            to={`/dashboard/barbers/${data.barber.id}`}
-          >
-            {data.barber?.name}
-          </Link>
-        ) : (
-          data.barber?.name
-        )}
-      </h3>
-      <p className="text-sm">
-        <b>Estilo:</b> {data.style} <br />
-        <b>Notas:</b> {data.notes}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        {data.photos?.length ? (
-          data.photos.map((p) => (
-            <div key={p.id} className="relative">
-              <img
-                src={`${API}/cuts/${data.id}/photos/${p.id}/data`}
-                width="200"
-                className="rounded-md object-cover cursor-pointer"
-                onClick={() =>
-                  window.open(
-                    `${API}/cuts/${data.id}/photos/${p.id}/data`,
-                    "_blank"
-                  )
-                }
-              />
-              <Button
-                size="icon"
-                variant="destructive"
-                className="top-1 right-1 absolute w-6 h-6"
-                onClick={() => delPhoto(p.id)}
-                title="Eliminar"
+    <section className="space-y-5">
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={() => navigate(-1)}>
+          <ArrowLeftIcon className="w-4 h-4 mr-1" />
+          Volver
+        </Button>
+      </div>
+
+      <div className="border rounded-lg p-5 space-y-3">
+        <div className="flex flex-col gap-1">
+          <h4 className="text-base font-semibold">
+            {data.client?.id ? (
+              <Link
+                to={`/dashboard/clients/${data.client.id}`}
+                className="hover:underline"
               >
-                ✕
-              </Button>
-            </div>
-          ))
+                {data.client.name}
+              </Link>
+            ) : (
+              data.client?.name || "Sin cliente"
+            )}
+          </h4>
+
+          <p className="text-sm text-muted-foreground">
+            {data.barber?.id ? (
+              <Link
+                to={`/dashboard/barbers/${data.barber.id}`}
+                className="hover:underline"
+              >
+                {data.barber.name}
+              </Link>
+            ) : (
+              data.barber?.name || "-"
+            )}
+          </p>
+        </div>
+
+        <div className="flex justify-between items-center mt-3 text-sm text-muted-foreground">
+          <span>
+            <b>Estilo:</b> {data.style || "Sin estilo"}
+          </span>
+          <div className="flex items-center gap-1">
+            <CameraIcon className="w-4 h-4" />
+            <span>{data.photos?.length || 0}</span>
+          </div>
+        </div>
+
+        {data.notes && (
+          <p className="text-sm mt-2">
+            <b>Notas:</b> {data.notes}
+          </p>
+        )}
+      </div>
+
+      <div className="border rounded-lg p-4">
+        <h4 className="text-sm font-medium mb-3">📸 Fotos</h4>
+
+        {data.photos?.length ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            {data.photos.map((p) => (
+              <div key={p.id} className="relative group">
+                <img
+                  src={`${API}/cuts/${data.id}/photos/${p.id}/data`}
+                  className="w-full aspect-square object-cover rounded-md border cursor-pointer group-hover:opacity-90 transition"
+                  onClick={() =>
+                    window.open(
+                      `${API}/cuts/${data.id}/photos/${p.id}/data`,
+                      "_blank"
+                    )
+                  }
+                />
+                <Button
+                  size="icon"
+                  variant="destructive"
+                  className="absolute top-1 right-1 w-6 h-6 opacity-90"
+                  onClick={() => delPhoto(p.id)}
+                  title="Eliminar"
+                >
+                  <Trash2Icon className="w-3 h-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
         ) : (
-          <em>Sin fotos</em>
+          <p className="text-sm text-muted-foreground italic">Sin fotos</p>
         )}
       </div>
     </section>
   );
 }
 
-// ------------ BarberDetail (route + component) ------------
-function BarberDetailRoute() {
+// ------------ BarberDetail ------------
+function BarberDetail() {
   const { id } = useParams();
-  return <BarberDetail id={id} />;
-}
-function BarberDetail({ id }) {
   const navigate = useNavigate();
   const [barber, setBarber] = useState(null);
   const [cuts, setCuts] = useState([]);
@@ -1384,7 +1426,8 @@ function BarberDetail({ id }) {
         api("/barbers"),
         api("/cuts"),
       ]);
-      setBarber(barbers.find((b) => String(b.id) === String(id)) || null);
+      const b = barbers.find((x) => String(x.id) === String(id));
+      setBarber(b || null);
       setCuts(
         allCuts.filter(
           (c) =>
@@ -1395,79 +1438,219 @@ function BarberDetail({ id }) {
     })();
   }, [id]);
 
-  if (!barber) return <p>Cargando…</p>;
+  if (!barber)
+    return <p className="text-sm text-muted-foreground">Cargando…</p>;
+
+  const handleDeleteCut = (cutId) => {
+    toast("¿Eliminar corte?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () =>
+          await toast.promise(
+            api(`/cuts/${cutId}`, { method: "DELETE" }).then(() => {
+              setCuts((prev) => prev.filter((x) => x.id !== cutId));
+            }),
+            {
+              loading: "Eliminando corte…",
+              success: "Corte eliminado",
+              error: "Error al eliminar corte",
+            }
+          ),
+      },
+    });
+  };
 
   return (
-    <section className="space-y-4">
-      <Button variant="ghost" onClick={() => navigate(-1)}>
-        ← Volver
-      </Button>
-      <h3 className="font-semibold text-lg">{barber.name}</h3>
-      {barber.bio && <p className="text-sm">{barber.bio}</p>}
+    <section className="space-y-5">
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={() => navigate(-1)}>
+          <ArrowLeftIcon className="w-4 h-4 mr-1" />
+          Volver
+        </Button>
+      </div>
 
-      <p className="text-sm">
-        <b>Cantidad de cortes:</b> {cuts.length}
-      </p>
+      {/* Datos del barbero */}
+      <div className="border rounded-lg p-5 space-y-2">
+        <h3 className="text-base font-semibold">{barber.name}</h3>
+        {barber.bio && (
+          <p className="text-sm text-muted-foreground">{barber.bio}</p>
+        )}
+        <p className="text-sm mt-2">
+          <b>Cantidad de cortes:</b> {cuts.length}
+        </p>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Cortes de {barber.name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Estilo</TableHead>
-                <TableHead>Fotos</TableHead>
-                <TableHead>Ver</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cuts.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>
-                    {c.client?.id ? (
-                      <Link
-                        className="underline"
-                        to={`/dashboard/clients/${c.client.id}`}
-                      >
-                        {c.client?.name}
-                      </Link>
-                    ) : (
-                      c.client?.name || "-"
-                    )}
-                  </TableCell>
-                  <TableCell>{c.style}</TableCell>
-                  <TableCell>{c.photos?.length || 0}</TableCell>
-                  <TableCell>
-                    <Button asChild size="sm" variant="outline">
-                      <Link to={`/dashboard/cuts/${c.id}`}>👁️</Link>
+      {/* Cortes asociados */}
+      <div className="border rounded-lg p-4">
+        <h4 className="text-sm font-medium mb-3">💇‍♂️ Cortes realizados</h4>
+
+        {cuts.length ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {cuts.map((c) => (
+              <div
+                key={c.id}
+                className="border rounded-md p-3 text-sm hover:bg-muted/50 transition"
+              >
+                <p className="font-medium">{c.client?.name || "Sin cliente"}</p>
+                <p className="text-muted-foreground text-xs">{c.style}</p>
+                <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <CameraIcon className="w-3 h-3" />
+                    <span>{c.photos?.length || 0}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => navigate(`/dashboard/cuts/${c.id}`)}
+                    >
+                      <EyeIcon />
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!cuts.length && (
-                <TableRow>
-                  <TableCell colSpan={4}>
-                    <em>Sin cortes registrados para este barbero.</em>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleDeleteCut(c.id)}
+                    >
+                      <Trash2Icon className="text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">
+            Sin cortes registrados.
+          </p>
+        )}
+      </div>
     </section>
   );
 }
 
-// ------------ ClientDetail (route + component) ------------
-function ClientDetailRoute() {
-  const { id } = useParams();
-  return <ClientDetail id={id} />;
+function Clients() {
+  const [clients, setClients] = useState([]);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const navigate = useNavigate();
+
+  const form = useForm({
+    resolver: zodResolver(
+      z.object({
+        name: z.string().min(1, "Requerido"),
+        phone: z.string().optional(),
+        notes: z.string().optional(),
+      })
+    ),
+    defaultValues: { name: "", phone: "", notes: "" },
+  });
+
+  useEffect(() => {
+    (async () => setClients(await api("/clients")))();
+  }, []);
+  const refresh = async () => setClients(await api("/clients"));
+
+  const onSubmit = async (data) => {
+    await api("/clients", { method: "POST", body: data });
+    form.reset();
+    await refresh();
+    setIsAddOpen(false);
+  };
+
+  const handleDelete = (id) => {
+    toast("¿Eliminar cliente?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () =>
+          await toast.promise(
+            api(`/clients/${id}`, { method: "DELETE" }).then(refresh),
+            {
+              loading: "Eliminando…",
+              success: "Cliente eliminado",
+              error: "Error al eliminar",
+            }
+          ),
+      },
+    });
+  };
+
+  return (
+    <>
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-lg">Clientes</h3>
+        <Button onClick={() => setIsAddOpen(true)}>
+          <PlusIcon /> Añadir
+        </Button>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {clients.map((c) => (
+          <div
+            key={c.id}
+            className="border rounded-lg p-4 hover:bg-muted/40 transition"
+          >
+            <h4 className="font-medium text-sm">{c.name}</h4>
+            <p className="text-xs text-muted-foreground">{c.phone || "-"}</p>
+            <div className="flex justify-end gap-2 mt-3">
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => navigate(`/dashboard/clients/${c.id}`)}
+              >
+                <EyeIcon />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => handleDelete(c.id)}
+              >
+                <Trash2Icon className="text-destructive" />
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Nuevo cliente</DrawerTitle>
+          </DrawerHeader>
+          <form
+            id="formAddClient"
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="p-6 space-y-4"
+          >
+            <Field>
+              <FieldLabel>Nombre</FieldLabel>
+              <Input {...form.register("name")} placeholder="Nombre" />
+              <FieldError>{form.formState.errors.name?.message}</FieldError>
+            </Field>
+            <Field>
+              <FieldLabel>Teléfono</FieldLabel>
+              <Input {...form.register("phone")} placeholder="+54 9 ..." />
+            </Field>
+            <Field>
+              <FieldLabel>Notas</FieldLabel>
+              <Input {...form.register("notes")} placeholder="Observaciones" />
+            </Field>
+          </form>
+          <DrawerFooter>
+            <Button type="submit" form="formAddClient">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline">Cancelar</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </>
+  );
 }
-function ClientDetail({ id }) {
+
+// ------------ ClientDetail ------------
+function ClientDetail() {
+  const { id } = useParams();
   const navigate = useNavigate();
   const [client, setClient] = useState(null);
   const [cuts, setCuts] = useState([]);
@@ -1478,92 +1661,113 @@ function ClientDetail({ id }) {
         api("/clients"),
         api("/cuts"),
       ]);
-      setClient(clients.find((c) => String(c.id) === String(id)) || null);
+      const c = clients.find((x) => String(x.id) === String(id));
+      setClient(c || null);
       setCuts(
         allCuts.filter(
-          (c) =>
-            String(c.clientId) === String(id) ||
-            String(c.client?.id ?? "") === String(id)
+          (x) =>
+            String(x.clientId) === String(id) ||
+            String(x.client?.id ?? "") === String(id)
         )
       );
     })();
   }, [id]);
 
-  if (!client) return <p>Cargando…</p>;
+  if (!client)
+    return <p className="text-sm text-muted-foreground">Cargando…</p>;
+
+  const handleDeleteCut = (cutId) => {
+    toast("¿Eliminar corte?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () =>
+          await toast.promise(
+            api(`/cuts/${cutId}`, { method: "DELETE" }).then(() => {
+              setCuts((prev) => prev.filter((x) => x.id !== cutId));
+            }),
+            {
+              loading: "Eliminando corte…",
+              success: "Corte eliminado",
+              error: "Error al eliminar corte",
+            }
+          ),
+      },
+    });
+  };
 
   return (
-    <section className="space-y-4">
-      <Button variant="ghost" onClick={() => navigate(-1)}>
-        ← Volver
-      </Button>
-      <h3 className="font-semibold text-lg">{client.name}</h3>
-      <p className="text-sm">
-        {client.phone && (
-          <>
-            <b>Teléfono:</b> {client.phone}
-            <br />
-          </>
-        )}
-        {client.notes && (
-          <>
-            <b>Notas:</b> {client.notes}
-          </>
-        )}
-      </p>
+    <section className="space-y-5">
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={() => navigate(-1)}>
+          <ArrowLeftIcon className="w-4 h-4 mr-1" />
+          Volver
+        </Button>
+      </div>
 
-      <p className="text-sm">
-        <b>Cantidad de cortes:</b> {cuts.length}
-      </p>
+      {/* Datos del cliente */}
+      <div className="border rounded-lg p-5 space-y-2">
+        <h3 className="text-base font-semibold">{client.name}</h3>
+        <div className="text-sm text-muted-foreground space-y-1">
+          {client.phone && (
+            <p>
+              <b>Teléfono:</b> {client.phone}
+            </p>
+          )}
+          {client.notes && (
+            <p>
+              <b>Notas:</b> {client.notes}
+            </p>
+          )}
+        </div>
+        <p className="text-sm mt-2">
+          <b>Cantidad de cortes:</b> {cuts.length}
+        </p>
+      </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Cortes de {client.name}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Barbero</TableHead>
-                <TableHead>Estilo</TableHead>
-                <TableHead>Fotos</TableHead>
-                <TableHead>Ver</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {cuts.map((c) => (
-                <TableRow key={c.id}>
-                  <TableCell>
-                    {c.barber?.id ? (
-                      <Link
-                        className="underline"
-                        to={`/dashboard/barbers/${c.barber.id}`}
-                      >
-                        {c.barber?.name}
-                      </Link>
-                    ) : (
-                      c.barber?.name || "-"
-                    )}
-                  </TableCell>
-                  <TableCell>{c.style}</TableCell>
-                  <TableCell>{c.photos?.length || 0}</TableCell>
-                  <TableCell>
-                    <Button asChild size="sm" variant="outline">
-                      <Link to={`/dashboard/cuts/${c.id}`}>👁️</Link>
+      {/* Cortes asociados */}
+      <div className="border rounded-lg p-4">
+        <h4 className="text-sm font-medium mb-3">💇‍♂️ Cortes realizados</h4>
+
+        {cuts.length ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+            {cuts.map((c) => (
+              <div
+                key={c.id}
+                className="border rounded-md p-3 text-sm hover:bg-muted/50 transition"
+              >
+                <p className="font-medium">{c.barber?.name || "Sin barbero"}</p>
+                <p className="text-muted-foreground text-xs">{c.style}</p>
+                <div className="flex justify-between mt-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <CameraIcon className="w-3 h-3" />
+                    <span>{c.photos?.length || 0}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => navigate(`/dashboard/cuts/${c.id}`)}
+                    >
+                      <EyeIcon />
                     </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!cuts.length && (
-                <TableRow>
-                  <TableCell colSpan={4}>
-                    <em>Sin cortes registrados para este cliente.</em>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleDeleteCut(c.id)}
+                    >
+                      <Trash2Icon className="text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground italic">
+            Sin cortes registrados.
+          </p>
+        )}
+      </div>
     </section>
   );
 }
