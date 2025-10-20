@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // --- Configuración global de Axios ---
-axios.defaults.baseURL = "https://api.tijeras.imeatara.com";
+axios.defaults.baseURL = "https://api.tijeras.imeatara.com/api";
 axios.defaults.withCredentials = true; // 🔥 clave: envía cookies automáticamente
 
 // Interceptor de respuesta para manejar expiración de sesión
