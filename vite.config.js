@@ -13,7 +13,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "http://localhost:3000",
+      "/api": "https://vps-5402059-x.dattaweb.com",
     },
   },
 });
