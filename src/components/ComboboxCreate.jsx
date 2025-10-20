@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -10,42 +10,30 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react";
+import { Check, Loader2, Plus, X } from "lucide-react";
 
-/**
- * ComboboxCreate
- *
- * Props:
- * - value: string
- * - onChange: (value: string) => void
- * - items: Array<{ value: string, label: string }>
- * - placeholder?: string
- * - emptyCreatePrefix?: string  // texto del botón "Crear ..."
- * - onCreate?: (name: string) => Promise<{ value: string, label: string }>
- * - disabled?: boolean
- * - className?: string
- */
 export default function ComboboxCreate({
   value,
   onChange,
   items,
   placeholder = "Selecciona…",
   emptyCreatePrefix = "Crear",
-  onCreate, // si viene, habilita crear inline
+  onCreate,
   disabled,
   className,
 }) {
-  const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(false);
 
-  const selectedLabel = items.find((i) => i.value === value)?.label || "";
+  const selected = items.find((i) => i.value === value);
+
+  // sincroniza el input con el valor seleccionado
+  useEffect(() => {
+    if (selected) setQuery(selected.label);
+    else setQuery("");
+  }, [selected]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -66,79 +54,87 @@ export default function ComboboxCreate({
       setCreating(true);
       const created = await onCreate(name);
       onChange(created.value);
-      setOpen(false);
+      setEditing(false);
     } finally {
       setCreating(false);
     }
   };
 
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className={cn("justify-between w-full", className)}
-        >
-          {selectedLabel || placeholder}
-          <ChevronsUpDown className="opacity-50 ml-2 w-4 h-4 shrink-0" />
-        </Button>
-      </PopoverTrigger>
+  const handleClear = () => {
+    onChange("");
+    setQuery("");
+    setEditing(true);
+  };
 
-      <PopoverContent className="p-0 w-[var(--radix-popper-anchor-width)] max-w-[calc(100vw-2rem)]">
+  return (
+    <div className={cn("flex flex-col gap-2", className)}>
+      <div className="relative">
         <Command>
           <CommandInput
-            placeholder="Buscar…"
-            className="h-9"
+            placeholder={placeholder}
+            disabled={disabled}
             value={query}
+            onFocus={() => setEditing(true)}
             onValueChange={setQuery}
+            className="pr-8 h-9"
           />
-          <CommandList>
-            <CommandEmpty>Sin resultados</CommandEmpty>
 
-            <CommandGroup>
-              {filtered.map((item) => (
-                <CommandItem
-                  key={item.value}
-                  value={item.label}
-                  onSelect={() => {
-                    onChange(item.value);
-                    setOpen(false);
-                  }}
-                >
-                  {item.label}
-                  <Check
-                    className={cn(
-                      "ml-auto w-4 h-4",
-                      value === item.value ? "opacity-100" : "opacity-0"
+          {selected && !editing && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="top-1/2 right-2 absolute opacity-60 hover:opacity-100 -translate-y-1/2"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+
+          {editing && (
+            <CommandList className="mt-1 border rounded-md max-h-52 overflow-y-auto">
+              <CommandEmpty>Sin resultados</CommandEmpty>
+
+              <CommandGroup>
+                {filtered.map((item) => (
+                  <CommandItem
+                    key={item.value}
+                    value={item.label}
+                    onSelect={() => {
+                      onChange(item.value);
+                      setEditing(false);
+                    }}
+                  >
+                    {item.label}
+                    <Check
+                      className={cn(
+                        "ml-auto w-4 h-4",
+                        value === item.value ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+
+              {onCreate && query.trim() && !exactMatch && (
+                <div className="mt-1 p-1 border-t">
+                  <Button
+                    variant="ghost"
+                    className="justify-start w-full"
+                    onClick={handleCreate}
+                    disabled={creating}
+                  >
+                    {creating ? (
+                      <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="mr-2 w-4 h-4" />
                     )}
-                  />
-                </CommandItem>
-              ))}
-            </CommandGroup>
-
-            {onCreate && query.trim() && !exactMatch && (
-              <div className="p-1 border-t">
-                <Button
-                  variant="ghost"
-                  className="justify-start w-full"
-                  onClick={handleCreate}
-                  disabled={creating}
-                >
-                  {creating ? (
-                    <Loader2 className="mr-2 w-4 h-4 animate-spin" />
-                  ) : (
-                    <Plus className="mr-2 w-4 h-4" />
-                  )}
-                  {emptyCreatePrefix} “{query.trim()}”
-                </Button>
-              </div>
-            )}
-          </CommandList>
+                    {emptyCreatePrefix} “{query.trim()}”
+                  </Button>
+                </div>
+              )}
+            </CommandList>
+          )}
         </Command>
-      </PopoverContent>
-    </Popover>
+      </div>
+    </div>
   );
 }

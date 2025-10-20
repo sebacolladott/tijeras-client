@@ -12,7 +12,7 @@ import {
   useParams,
   Outlet,
 } from "react-router";
-import axios from "axios";
+import axios from "@/lib/axios";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -39,21 +39,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Card,
-  CardHeader,
-  CardContent,
-  CardFooter,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "@/components/ui/table";
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+} from "@/components/ui/command";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -103,14 +98,22 @@ import {
   RectangleEllipsisIcon,
   ScissorsIcon,
   Trash2Icon,
+  UserPlusIcon,
+  UsersIcon,
   XIcon,
 } from "lucide-react";
 import ComboboxCreate from "./components/ComboboxCreate";
 import { toast } from "sonner";
+import { Switch } from "./components/ui/switch";
 
-const API = "http://localhost:3000/api";
+const API = axios.defaults.baseURL;
 
 // ------------ Schemas ------------
+const loginSchema = z.object({
+  email: z.email("Email inválido"),
+  password: z.string().min(6, "Mínimo 6 caracteres"),
+});
+
 const changeSchema = z.object({
   oldPassword: z.string().min(6, "Mínimo 6 caracteres"),
   newPassword: z.string().min(6, "Mínimo 6 caracteres"),
@@ -129,64 +132,118 @@ const cutSchema = z.object({
   photos: z.array(photoSchema).optional(),
 });
 
-// ------------ Axios ------------
-const http = axios.create({
-  baseURL: "/api",
-  withCredentials: true,
-  headers: { "Content-Type": "application/json" },
-});
-http.interceptors.response.use(
-  (res) => res.data,
-  (err) => {
-    const msg =
-      err?.response?.data?.error ||
-      err?.response?.data?.message ||
-      err?.message ||
-      "Error";
-    return Promise.reject(new Error(msg));
-  }
-);
-async function api(path, options = {}) {
-  const method = (options.method || "GET").toLowerCase();
-  const data = options.body ?? undefined;
-  return http.request({ url: path, method, data });
-}
-
 // ------------ AppSidebar ------------
 function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, clearUser } = useUserStore();
+
   const [isChangingOpen, setIsChangingOpen] = useState(false);
+  const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+  const [isUsersOpen, setIsUsersOpen] = useState(false);
+
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   const isActive = (path) =>
     path === "/"
       ? location.pathname === "/"
       : location.pathname.startsWith(path);
 
+  // --- Formularios ---
   const changeForm = useForm({
     resolver: zodResolver(changeSchema),
     defaultValues: { oldPassword: "", newPassword: "" },
   });
 
+  const registerForm = useForm({
+    resolver: zodResolver(
+      z.object({
+        email: z.string().email("Email inválido"),
+        password: z.string().min(6, "Mínimo 6 caracteres"),
+        role: z.enum(["USER", "ADMIN"]).default("USER"),
+      })
+    ),
+    defaultValues: { email: "", password: "", role: "USER" },
+  });
+
+  // --- Acciones ---
   const changePass = async (values) => {
     try {
-      await api("/auth/change-password", { method: "POST", body: values });
+      await axios.post("/auth/change-password", values);
       changeForm.reset();
       setIsChangingOpen(false);
       toast.success("Contraseña actualizada");
-    } catch (e) {
+    } catch {
       toast.error("Error al cambiar la contraseña");
-      console.error(e.message);
+    }
+  };
+
+  const registerUser = async (values) => {
+    try {
+      await toast.promise(axios.post("/auth/register", values), {
+        loading: "Registrando…",
+        success: "Usuario creado",
+        error: "Error al registrar",
+      });
+      registerForm.reset();
+      setIsRegisterOpen(false);
+    } catch (e) {
+      console.error(e);
     }
   };
 
   const logout = async () => {
-    await api("/auth/logout", { method: "POST" });
+    await axios.post("/auth/logout");
     clearUser();
     navigate("/login", { replace: true });
   };
 
+  // --- Gestión de usuarios (CommandDialog) ---
+  const fetchUsers = async () => {
+    setLoadingUsers(true);
+    try {
+      const res = await axios.get("/auth/users");
+      setUsers(res.data);
+    } catch {
+      toast.error("Error al cargar usuarios");
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  const deleteUser = async (id) => {
+    if (!confirm("¿Eliminar este usuario?")) return;
+    try {
+      await axios.delete(`/auth/users/${id}`);
+      toast.success("Usuario eliminado");
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+    } catch {
+      toast.error("Error al eliminar");
+    }
+  };
+
+  const toggleRole = async (user) => {
+    const newRole = user.role === "ADMIN" ? "USER" : "ADMIN";
+    try {
+      await axios.put(`/auth/users/${user.id}`, {
+        email: user.email,
+        role: newRole,
+      });
+      toast.success("Rol actualizado");
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, role: newRole } : u))
+      );
+    } catch {
+      toast.error("Error al cambiar rol");
+    }
+  };
+
+  useEffect(() => {
+    if (isUsersOpen) fetchUsers();
+  }, [isUsersOpen]);
+
+  // --- Render ---
   return (
     <>
       <Sidebar>
@@ -198,28 +255,25 @@ function AppSidebar() {
                   size="lg"
                   className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
                 >
-                  <div className="flex flex-col gap-0.5 leading-none">
-                    <div className="flex items-center gap-2">
-                      <div className="flex justify-center items-center bg-sidebar-primary rounded-lg size-8">
-                        <img
-                          src="/tijeras.webp"
-                          alt="Icono"
-                          className="w-8 h-8 object-contain"
-                        />
-                      </div>
-                      <div className="flex-1 grid text-sm text-left leading-tight">
-                        <span className="font-bullettokilla font-medium truncate">
-                          Tijeras
-                        </span>
-                        <span className="text-xs truncate">{user?.email}</span>
-                      </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex justify-center items-center bg-sidebar-primary rounded-lg size-8">
+                      <img
+                        src="/tijeras.webp"
+                        alt="Icono"
+                        className="w-8 h-8 object-contain"
+                      />
+                    </div>
+                    <div className="flex-1 grid text-sm text-left leading-tight">
+                      <span className="font-bullettokilla font-medium truncate">
+                        Tijeras
+                      </span>
+                      <span className="text-xs truncate">{user?.email}</span>
                     </div>
                   </div>
                   <ChevronsUpDownIcon className="ml-auto" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
 
-              {/* Solo cambiar contraseña */}
               <DropdownMenuContent
                 className="w-(--radix-dropdown-menu-trigger-width)"
                 align="start"
@@ -228,6 +282,20 @@ function AppSidebar() {
                   <RectangleEllipsisIcon className="mr-2 size-4" />
                   Cambiar contraseña
                 </DropdownMenuItem>
+
+                {user?.role === "ADMIN" && (
+                  <>
+                    <DropdownMenuItem onClick={() => setIsRegisterOpen(true)}>
+                      <UserPlusIcon className="mr-2 size-4" />
+                      Registrar usuario
+                    </DropdownMenuItem>
+
+                    <DropdownMenuItem onClick={() => setIsUsersOpen(true)}>
+                      <UsersIcon className="mr-2 size-4" />
+                      Gestionar usuarios
+                    </DropdownMenuItem>
+                  </>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </SidebarMenu>
@@ -239,27 +307,18 @@ function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive("/dashboard/barbers")}
-                  >
-                    <Link to="/dashboard/barbers">Barberos</Link>
+                  <SidebarMenuButton asChild isActive={isActive("/cuts")}>
+                    <Link to="/cuts">Cortes</Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive("/dashboard/clients")}
-                  >
-                    <Link to="/dashboard/clients">Clientes</Link>
+                  <SidebarMenuButton asChild isActive={isActive("/barbers")}>
+                    <Link to="/barbers">Barberos</Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={isActive("/dashboard/cuts")}
-                  >
-                    <Link to="/dashboard/cuts">Cortes</Link>
+                  <SidebarMenuButton asChild isActive={isActive("/clients")}>
+                    <Link to="/clients">Clientes</Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -267,7 +326,6 @@ function AppSidebar() {
           </SidebarGroup>
         </SidebarContent>
 
-        {/* Footer con cerrar sesión */}
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
@@ -300,7 +358,7 @@ function AppSidebar() {
             <FieldSet>
               <FieldLegend>Actualizar contraseña</FieldLegend>
               <FieldGroup className="flex flex-col gap-4">
-                <Field data-invalid={!!changeForm.formState.errors.oldPassword}>
+                <Field>
                   <FieldLabel htmlFor="oldPassword">
                     Contraseña actual
                   </FieldLabel>
@@ -309,12 +367,14 @@ function AppSidebar() {
                     type="password"
                     {...changeForm.register("oldPassword")}
                   />
-                  <FieldError>
-                    {changeForm.formState.errors.oldPassword?.message}
-                  </FieldError>
+                  {changeForm.formState.errors.oldPassword && (
+                    <FieldError>
+                      {changeForm.formState.errors.oldPassword.message}
+                    </FieldError>
+                  )}
                 </Field>
 
-                <Field data-invalid={!!changeForm.formState.errors.newPassword}>
+                <Field>
                   <FieldLabel htmlFor="newPassword">
                     Nueva contraseña
                   </FieldLabel>
@@ -323,9 +383,11 @@ function AppSidebar() {
                     type="password"
                     {...changeForm.register("newPassword")}
                   />
-                  <FieldError>
-                    {changeForm.formState.errors.newPassword?.message}
-                  </FieldError>
+                  {changeForm.formState.errors.newPassword && (
+                    <FieldError>
+                      {changeForm.formState.errors.newPassword.message}
+                    </FieldError>
+                  )}
                 </Field>
               </FieldGroup>
             </FieldSet>
@@ -333,682 +395,411 @@ function AppSidebar() {
 
           <DrawerFooter>
             <Button type="submit" form="changingForm" className="w-full">
-              Actualizar
+              Guardar
             </Button>
             <DrawerClose asChild>
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full"
-                onClick={() => setIsChangingOpen(false)}
-              >
+              <Button variant="outline" className="w-full">
                 Cancelar
               </Button>
             </DrawerClose>
           </DrawerFooter>
         </DrawerContent>
       </Drawer>
+
+      {/* Drawer registrar usuario */}
+      <Drawer open={isRegisterOpen} onOpenChange={setIsRegisterOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Registrar nuevo usuario</DrawerTitle>
+            <DrawerDescription>
+              Solo los administradores pueden crear nuevas cuentas.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <form
+            id="registerForm"
+            onSubmit={registerForm.handleSubmit(registerUser)}
+            className="space-y-6 p-4"
+          >
+            <FieldSet>
+              <FieldLegend>Datos del usuario</FieldLegend>
+              <FieldGroup className="flex flex-col gap-4">
+                <Field>
+                  <FieldLabel htmlFor="email">Email</FieldLabel>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="usuario@demo.local"
+                    {...registerForm.register("email")}
+                  />
+                  {registerForm.formState.errors.email && (
+                    <FieldError>
+                      {registerForm.formState.errors.email.message}
+                    </FieldError>
+                  )}
+                </Field>
+
+                <Field>
+                  <FieldLabel htmlFor="password">Contraseña</FieldLabel>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="••••••••"
+                    {...registerForm.register("password")}
+                  />
+                  {registerForm.formState.errors.password && (
+                    <FieldError>
+                      {registerForm.formState.errors.password.message}
+                    </FieldError>
+                  )}
+                </Field>
+
+                <Field
+                  orientation="horizontal"
+                  className="justify-between items-center"
+                >
+                  <FieldLabel htmlFor="role">Administrador</FieldLabel>
+                  <Switch
+                    id="role"
+                    checked={registerForm.watch("role") === "ADMIN"}
+                    onCheckedChange={(checked) =>
+                      registerForm.setValue("role", checked ? "ADMIN" : "USER")
+                    }
+                  />
+                </Field>
+              </FieldGroup>
+            </FieldSet>
+          </form>
+
+          <DrawerFooter>
+            <Button type="submit" form="registerForm" className="w-full">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline" className="w-full">
+                Cancelar
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* CommandDialog gestión de usuarios */}
+      <CommandDialog open={isUsersOpen} onOpenChange={setIsUsersOpen}>
+        <CommandInput placeholder="Buscar usuario por email..." />
+        <CommandList>
+          {loadingUsers ? (
+            <CommandEmpty>Cargando…</CommandEmpty>
+          ) : users.length === 0 ? (
+            <CommandEmpty>Sin usuarios registrados</CommandEmpty>
+          ) : (
+            <>
+              <CommandGroup heading="Usuarios">
+                {users.map((u) => (
+                  <CommandItem
+                    key={u.id}
+                    className="flex justify-between items-center"
+                  >
+                    <div>
+                      <span className="font-medium">{u.email}</span>
+                      <span className="ml-2 text-muted-foreground text-xs">
+                        {u.role}
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant={u.role === "ADMIN" ? "secondary" : "outline"}
+                        onClick={() => toggleRole(u)}
+                      >
+                        {u.role === "ADMIN" ? "Quitar admin" : "Hacer admin"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => deleteUser(u.id)}
+                      >
+                        Eliminar
+                      </Button>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+
+              <CommandSeparator />
+              <CommandGroup heading="Acciones">
+                <CommandItem onSelect={() => setIsUsersOpen(false)}>
+                  Cerrar
+                </CommandItem>
+              </CommandGroup>
+            </>
+          )}
+        </CommandList>
+      </CommandDialog>
     </>
   );
 }
 
 // ------------ App ------------
-function App() {
+
+function ProtectedLayout() {
   const { user, setUser } = useUserStore();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      try {
-        const me = await api("/auth/me");
-        setUser(me);
-      } catch {
-        setUser(null);
-      } finally {
-        setChecking(false);
-      }
-    })();
-  }, []);
+    axios
+      .get("/auth/me")
+      .then((res) => setUser(res.data))
+      .catch(() => setUser(null))
+      .finally(() => setChecking(false));
+  }, [setUser]);
 
+  if (checking) return null; // evita flash
+  if (!user) return <Navigate to="/login" replace />;
+
+  return (
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset className="flex-1 bg-gradient-to-br from-background to-primary/10 overflow-auto text-foreground">
+        <div className="flex flex-col space-y-4 p-4 h-dvh">
+          <SidebarTrigger />
+          <Outlet />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
+function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route
-          path="/"
-          element={
-            user ? (
-              <Navigate to="/dashboard/barbers" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
+        {/* Rutas públicas */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/reset-request" element={<ResetRequest />} />
+        <Route path="/reset" element={<ResetPassword />} />
 
-        {/* Auth */}
-        <Route
-          path="/login"
-          element={<Auth mode="login" user={user} checking={checking} />}
-        />
-        <Route
-          path="/register"
-          element={<Auth mode="register" user={user} checking={checking} />}
-        />
-        <Route
-          path="/reset-request"
-          element={
-            <Auth mode="reset-request" user={user} checking={checking} />
-          }
-        />
-        <Route
-          path="/reset"
-          element={<Auth mode="reset" user={user} checking={checking} />}
-        />
-
-        {/* Dashboard (protected) */}
-        <Route
-          path="/dashboard"
-          element={
-            <Protected user={user} checking={checking}>
-              <SidebarProvider>
-                <AppSidebar />
-                <SidebarInset className="flex-1 bg-gradient-to-br from-background to-primary/10 overflow-auto text-foreground">
-                  <Dashboard user={user} onLogout={() => setUser(null)} />
-                </SidebarInset>
-              </SidebarProvider>
-            </Protected>
-          }
-        >
-          <Route index element={<Navigate to="barbers" replace />} />
-          <Route path="barbers" element={<Barbers />} />
-          <Route path="barbers/:id" element={<BarberDetail />} />
-          <Route path="clients" element={<Clients />} />
-          <Route path="clients/:id" element={<ClientDetail />} />
+        {/* Rutas protegidas */}
+        <Route element={<ProtectedLayout />}>
+          <Route index element={<Navigate to="/cuts" replace />} />
           <Route path="cuts" element={<Cuts />} />
           <Route path="cuts/:id" element={<CutDetail />} />
+          <Route path="clients" element={<Clients />} />
+          <Route path="clients/:id" element={<ClientDetail />} />
+          <Route path="barbers" element={<Barbers />} />
+          <Route path="barbers/:id" element={<BarberDetail />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-
-        <Route path="*" element={<NotFound user={user} />} />
       </Routes>
       <Toaster />
     </BrowserRouter>
   );
 }
 
-// ------------ Protected ------------
-function Protected({ user, checking, children }) {
-  if (checking) return <p className="p-6">Verificando sesión…</p>;
-  if (!user) return <Navigate to="/login" replace />;
-  return children;
-}
-
 // ------------ Auth ------------
-function Auth({ mode, user, checking }) {
+function Login() {
   const navigate = useNavigate();
-  const { setUser } = useUserStore();
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
+  const { user, setUser } = useUserStore();
 
-  useEffect(() => {
-    if (!checking && user) navigate("/dashboard/barbers", { replace: true });
-  }, [user, checking, navigate]);
+  const form = useForm({ resolver: zodResolver(loginSchema) });
 
-  const schemas = {
-    login: z.object({
-      email: z.string().email("Email inválido"),
-      password: z.string().min(6, "Mínimo 6 caracteres"),
-    }),
-    register: z.object({
-      email: z.string().email("Email inválido"),
-      password: z.string().min(6, "Mínimo 6 caracteres"),
-    }),
-    "reset-request": z.object({
-      email: z.string().email("Email inválido"),
-    }),
-    reset: z.object({
-      token: z.string().min(1, "El token es obligatorio"),
-      newPassword: z.string().min(6, "Mínimo 6 caracteres"),
-    }),
-  };
-
-  const form = useForm({
-    resolver: zodResolver(schemas[mode]),
-    defaultValues:
-      mode === "reset"
-        ? { token: "", newPassword: "" }
-        : { email: "", password: "" },
-  });
-
-  const onSubmit = async (values) => {
-    try {
-      setError("");
-      setMessage("");
-
-      if (mode === "reset-request") {
-        await api("/auth/request-reset", {
-          method: "POST",
-          body: { email: values.email },
-        });
-        setMessage("Se generó un token (revisá la consola del servidor).");
-        navigate("/reset", { replace: true });
-        return;
+  const onSubmit = (values) =>
+    toast.promise(
+      axios.post("/auth/login", values).then((res) => {
+        setUser(res.data);
+        navigate("/", { replace: true });
+      }),
+      {
+        loading: "Ingresando…",
+        success: "Sesión iniciada",
+        error: "Credenciales inválidas",
       }
-
-      if (mode === "reset") {
-        await api("/auth/reset-password", {
-          method: "POST",
-          body: { token: values.token, newPassword: values.newPassword },
-        });
-        setMessage("Contraseña restablecida. Ahora podés iniciar sesión.");
-        navigate("/login", { replace: true });
-        return;
-      }
-
-      const data = await api(`/auth/${mode}`, {
-        method: "POST",
-        body: { email: values.email, password: values.password },
-      });
-      setUser(data);
-      navigate("/dashboard/barbers", { replace: true });
-    } catch (e) {
-      setError(e.message);
-    }
-  };
-
-  const title =
-    mode === "login"
-      ? "Iniciar sesión"
-      : mode === "register"
-      ? "Registrarse"
-      : mode === "reset-request"
-      ? "Recuperar cuenta"
-      : "Restablecer contraseña";
+    );
 
   return (
-    <div className="mx-auto my-16 max-w-sm">
-      <Card>
-        <CardHeader>
-          <CardTitle>{title}</CardTitle>
-          <CardDescription>
-            {mode === "login" && "Accedé a tu cuenta"}
-            {mode === "register" && "Creá tu cuenta"}
-            {mode === "reset-request" && "Solicitá un token de recuperación"}
-            {mode === "reset" && "Ingresá el token y tu nueva contraseña"}
-          </CardDescription>
-        </CardHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <CardContent className="space-y-3">
-              {(mode === "login" ||
-                mode === "register" ||
-                mode === "reset-request") && (
-                <FormField
-                  control={form.control}
-                  name="email"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Email</FormLabel>
-                      <FormControl>
-                        <Input placeholder="usuario@email.com" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+    <div className="flex justify-center items-center bg-gradient-to-br from-background to-primary/10 h-dvh">
+      <div className="shadow-sm p-8 border rounded-lg w-full max-w-sm">
+        <h1 className="mb-4 font-semibold text-xl text-center">
+          Iniciar sesión
+        </h1>
+
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <FieldSet>
+            <FieldLegend>Datos de acceso</FieldLegend>
+            <FieldDescription>
+              Ingresá tu correo y contraseña para acceder al panel.
+            </FieldDescription>
+
+            <FieldGroup className="flex flex-col gap-4">
+              {/* Email */}
+              <Field>
+                <FieldLabel>Email</FieldLabel>
+                <Input
+                  type="email"
+                  autoComplete="off"
+                  placeholder="usuario@email.com"
+                  {...form.register("email")}
                 />
-              )}
+                {form.formState.errors.email && (
+                  <FieldError>{form.formState.errors.email.message}</FieldError>
+                )}
+              </Field>
 
-              {(mode === "login" || mode === "register") && (
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contraseña</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="password"
-                          placeholder="••••••••"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+              {/* Contraseña */}
+              <Field>
+                <FieldLabel>Contraseña</FieldLabel>
+                <Input
+                  type="password"
+                  placeholder="••••••••"
+                  {...form.register("password")}
                 />
-              )}
+                {form.formState.errors.password && (
+                  <FieldError>
+                    {form.formState.errors.password.message}
+                  </FieldError>
+                )}
+              </Field>
+            </FieldGroup>
+          </FieldSet>
 
-              {mode === "reset" && (
-                <>
-                  <FormField
-                    control={form.control}
-                    name="token"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Token</FormLabel>
-                        <FormControl>
-                          <Input placeholder="TOKEN" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="newPassword"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Nueva contraseña</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="password"
-                            placeholder="••••••••"
-                            {...field}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
-              )}
+          <Button type="submit" className="w-full">
+            Entrar
+          </Button>
 
-              {error && <p className="text-red-600 text-sm">{error}</p>}
-              {message && <p className="text-green-600 text-sm">{message}</p>}
-            </CardContent>
-            <CardFooter className="flex flex-col gap-2">
-              <Button type="submit" className="w-full">
-                {mode === "login"
-                  ? "Entrar"
-                  : mode === "register"
-                  ? "Crear cuenta"
-                  : mode === "reset-request"
-                  ? "Enviar enlace"
-                  : "Restablecer"}
-              </Button>
-
-              {mode === "login" && (
-                <>
-                  <Button asChild variant="secondary" className="w-full">
-                    <Link to="/register">Crear cuenta nueva</Link>
-                  </Button>
-                  <Button asChild variant="ghost" className="w-full">
-                    <Link to="/reset-request">Olvidé mi contraseña</Link>
-                  </Button>
-                </>
-              )}
-              {mode === "register" && (
-                <Button asChild variant="ghost" className="w-full">
-                  <Link to="/login">Ya tengo cuenta</Link>
-                </Button>
-              )}
-            </CardFooter>
-          </form>
-        </Form>
-      </Card>
+          <Button asChild variant="ghost" className="w-full">
+            <Link to="/reset-request">Olvidé mi contraseña</Link>
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }
 
-// ------------ Dashboard ------------
-function Dashboard() {
-  return (
-    <>
-      <div className="flex flex-col space-y-4 p-4 h-dvh">
-        <SidebarTrigger />
-
-        <Outlet />
-      </div>
-    </>
-  );
-}
-
-// ------------ CRUD genérico (Zod + shadcn) ------------
-function Crud({ title, entity }) {
-  const [list, setList] = useState([]);
-  const [editId, setEditId] = useState(null);
-
-  const barberSchema = z.object({
-    name: z.string().min(1, "Obligatorio"),
-    bio: z.string().optional(),
-    phone: z.string().optional(), // ignorado para barbers
-    notes: z.string().optional(), // ignorado para barbers
-  });
-
-  const clientSchema = z.object({
-    name: z.string().min(1, "Obligatorio"),
-    phone: z.string().min(6, "Teléfono inválido").optional(),
-    notes: z.string().optional(),
-    bio: z.string().optional(), // ignorado para clients
-  });
-
-  const schema = entity === "barbers" ? barberSchema : clientSchema;
-
-  const form = useForm({
-    resolver: zodResolver(schema),
-    defaultValues: { name: "", bio: "", phone: "", notes: "" },
-  });
-
-  const isBarbers = entity === "barbers";
-  const isClients = entity === "clients";
-  const isPeople = isBarbers || isClients;
-
-  const fetchList = async () => {
-    const data = await api(`/${entity}`);
-    setList(data);
-  };
+function ResetRequest() {
+  const navigate = useNavigate();
+  const { user } = useUserStore();
 
   useEffect(() => {
-    setEditId(null);
-    form.reset({ name: "", bio: "", phone: "", notes: "" });
-    fetchList();
-  }, [entity]);
+    if (user) navigate("/cuts", { replace: true });
+  }, [user, navigate]);
+
+  const schema = z.object({
+    email: z.string().email("Email inválido"),
+  });
+
+  const form = useForm({ resolver: zodResolver(schema) });
 
   const onSubmit = async (values) => {
-    const payload = {
-      name: values.name,
-      ...(isBarbers ? { bio: values.bio } : {}),
-      ...(isClients ? { phone: values.phone, notes: values.notes } : {}),
-    };
-    const method = editId ? "PUT" : "POST";
-    const path = editId ? `/${entity}/${editId}` : `/${entity}`;
-    await api(path, { method, body: payload });
-    form.reset({ name: "", bio: "", phone: "", notes: "" });
-    setEditId(null);
-    fetchList();
-  };
-
-  const handleEdit = (item) => {
-    setEditId(item.id);
-    form.reset({
-      name: item.name || "",
-      bio: item.bio || "",
-      phone: item.phone || "",
-      notes: item.notes || "",
+    await toast.promise(axios.post("/auth/request-reset", values), {
+      loading: "Enviando correo…",
+      success: "Se generó un token (ver consola del servidor)",
+      error: "Error al enviar correo",
     });
-  };
 
-  const handleDelete = async (id) => {
-    if (!confirm("¿Eliminar?")) return;
-    await api(`/${entity}/${id}`, { method: "DELETE" });
-    fetchList();
+    navigate("/reset", { replace: true });
   };
 
   return (
-    <section className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-lg">{title}</h3>
-        {editId && (
-          <Button
-            variant="ghost"
-            onClick={() => (setEditId(null), form.reset())}
-          >
-            Cancelar edición
-          </Button>
-        )}
-      </div>
+    <div className="flex justify-center items-center bg-gradient-to-br from-background to-primary/10 h-dvh">
+      <div className="shadow-sm p-8 border rounded-lg w-full max-w-sm">
+        <h1 className="mb-4 font-semibold text-xl text-center">
+          Recuperar cuenta
+        </h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{editId ? "Editar" : "Agregar"}</CardTitle>
-        </CardHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)}>
-            <CardContent className="gap-3 grid sm:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem className="sm:col-span-2">
-                    <FormLabel>Nombre</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Nombre" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <FieldSet>
+            <FieldLegend>Restablecer contraseña</FieldLegend>
+            <FieldDescription>
+              Ingresá tu email para generar un enlace de recuperación.
+            </FieldDescription>
 
-              {isBarbers && (
-                <FormField
-                  control={form.control}
-                  name="bio"
-                  render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel>Bio</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Descripción corta" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+            <FieldGroup className="flex flex-col gap-4">
+              <Field>
+                <FieldLabel>Email</FieldLabel>
+                <Input
+                  type="email"
+                  placeholder="usuario@email.com"
+                  autoComplete="off"
+                  {...form.register("email")}
                 />
-              )}
-
-              {isClients && (
-                <>
-                  <FormField
-                    control={form.control}
-                    name="phone"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Teléfono</FormLabel>
-                        <FormControl>
-                          <Input placeholder="+54 9 ..." {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="notes"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Notas</FormLabel>
-                        <FormControl>
-                          <Input placeholder="Observaciones" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </>
-              )}
-            </CardContent>
-            <CardFooter>
-              <Button type="submit">{editId ? "Guardar" : "Agregar"}</Button>
-            </CardFooter>
-          </form>
-        </Form>
-      </Card>
-
-      <Card>
-        <CardContent className="pt-6">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nombre</TableHead>
-                {isBarbers && <TableHead>Bio</TableHead>}
-                {isClients && (
-                  <>
-                    <TableHead>Teléfono</TableHead>
-                    <TableHead>Notas</TableHead>
-                  </>
+                {form.formState.errors.email && (
+                  <FieldError>{form.formState.errors.email.message}</FieldError>
                 )}
-                <TableHead className="w-[140px]">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {list.map((i) => (
-                <TableRow key={i.id}>
-                  <TableCell>
-                    {isPeople ? (
-                      <Link
-                        className="underline"
-                        to={`/dashboard/${entity}/${i.id}`}
-                      >
-                        {i.name}
-                      </Link>
-                    ) : (
-                      i.name
-                    )}
-                  </TableCell>
-                  {isBarbers && <TableCell>{i.bio}</TableCell>}
-                  {isClients && (
-                    <>
-                      <TableCell>{i.phone}</TableCell>
-                      <TableCell>{i.notes}</TableCell>
-                    </>
-                  )}
-                  <TableCell className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleEdit(i)}
-                    >
-                      ✏️
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() => handleDelete(i.id)}
-                    >
-                      🗑️
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!list.length && (
-                <TableRow>
-                  <TableCell colSpan={isClients ? 5 : isBarbers ? 4 : 3}>
-                    <em>Sin registros.</em>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </section>
+              </Field>
+            </FieldGroup>
+          </FieldSet>
+
+          <Button type="submit" className="w-full">
+            Enviar enlace
+          </Button>
+
+          <Button asChild variant="ghost" className="w-full">
+            <Link to="/login">Volver al inicio de sesión</Link>
+          </Button>
+        </form>
+      </div>
+    </div>
   );
 }
 
-function Barbers() {
-  const [barbers, setBarbers] = useState([]);
-  const [isAddOpen, setIsAddOpen] = useState(false);
+function ResetPassword() {
   const navigate = useNavigate();
-
-  const form = useForm({
-    resolver: zodResolver(
-      z.object({
-        name: z.string().min(1, "Requerido"),
-        bio: z.string().optional(),
-      })
-    ),
-    defaultValues: { name: "", bio: "" },
-  });
+  const { user } = useUserStore();
 
   useEffect(() => {
-    (async () => setBarbers(await api("/barbers")))();
-  }, []);
-  const refresh = async () => setBarbers(await api("/barbers"));
+    if (user) navigate("/cuts", { replace: true });
+  }, [user, navigate]);
 
-  const onSubmit = async (data) => {
-    await api("/barbers", { method: "POST", body: data });
-    form.reset();
-    await refresh();
-    setIsAddOpen(false);
-  };
+  const schema = z.object({
+    token: z.string().min(1, "El token es obligatorio"),
+    newPassword: z.string().min(6, "Mínimo 6 caracteres"),
+  });
 
-  const handleDelete = (id) => {
-    toast("¿Eliminar barbero?", {
-      action: {
-        label: "Eliminar",
-        onClick: async () =>
-          await toast.promise(
-            api(`/barbers/${id}`, { method: "DELETE" }).then(refresh),
-            {
-              loading: "Eliminando…",
-              success: "Barbero eliminado",
-              error: "Error al eliminar",
-            }
-          ),
-      },
+  const form = useForm({ resolver: zodResolver(schema) });
+
+  const onSubmit = async (values) => {
+    await toast.promise(axios.post("/auth/reset-password", values), {
+      loading: "Restableciendo contraseña…",
+      success: "Contraseña restablecida correctamente",
+      error: "Error al restablecer contraseña",
     });
+
+    navigate("/login", { replace: true });
   };
 
   return (
-    <>
-      <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-lg">Barberos</h3>
-        <Button onClick={() => setIsAddOpen(true)}>
-          <PlusIcon /> Añadir
-        </Button>
-      </div>
+    <div className="flex justify-center items-center bg-gradient-to-br from-background to-primary/10 h-dvh">
+      <div className="shadow-sm p-8 border rounded-lg w-full max-w-sm">
+        <h1 className="mb-4 font-semibold text-xl text-center">
+          Restablecer contraseña
+        </h1>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <Field>
+            <FieldLabel>Token</FieldLabel>
+            <Input {...form.register("token")} placeholder="TOKEN" />
+            <FieldError>{form.formState.errors.token?.message}</FieldError>
+          </Field>
+          <Field>
+            <FieldLabel>Nueva contraseña</FieldLabel>
+            <Input
+              type="password"
+              {...form.register("newPassword")}
+              placeholder="••••••••"
+            />
+            <FieldError>
+              {form.formState.errors.newPassword?.message}
+            </FieldError>
+          </Field>
+          <Button type="submit" className="w-full">
+            Restablecer
+          </Button>
 
-      <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
-        {barbers.map((b) => (
-          <div
-            key={b.id}
-            className="hover:bg-muted/40 p-4 border rounded-lg transition"
-          >
-            <h4 className="font-medium text-sm">{b.name}</h4>
-            <p className="text-muted-foreground text-xs">
-              {b.bio || "Sin bio"}
-            </p>
-            <div className="flex justify-end gap-2 mt-3">
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => navigate(`/dashboard/barbers/${b.id}`)}
-              >
-                <EyeIcon />
-              </Button>
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => handleDelete(b.id)}
-              >
-                <Trash2Icon className="text-destructive" />
-              </Button>
-            </div>
-          </div>
-        ))}
+          <Button asChild variant="ghost" className="w-full">
+            <Link to="/login">Volver al inicio de sesión</Link>
+          </Button>
+        </form>
       </div>
-
-      <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Nuevo barbero</DrawerTitle>
-          </DrawerHeader>
-          <form
-            id="formAddBarber"
-            onSubmit={form.handleSubmit(onSubmit)}
-            className="space-y-4 p-6"
-          >
-            <Field>
-              <FieldLabel>Nombre</FieldLabel>
-              <Input {...form.register("name")} placeholder="Nombre" />
-              <FieldError>{form.formState.errors.name?.message}</FieldError>
-            </Field>
-            <Field>
-              <FieldLabel>Bio</FieldLabel>
-              <Textarea
-                {...form.register("bio")}
-                placeholder="Descripción corta"
-              />
-            </Field>
-          </form>
-          <DrawerFooter>
-            <Button type="submit" form="formAddBarber">
-              Guardar
-            </Button>
-            <DrawerClose asChild>
-              <Button variant="outline">Cancelar</Button>
-            </DrawerClose>
-          </DrawerFooter>
-        </DrawerContent>
-      </Drawer>
-    </>
+    </div>
   );
 }
 
@@ -1018,8 +809,11 @@ function Cuts() {
   const [clients, setClients] = useState([]);
   const [barbers, setBarbers] = useState([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const navigate = useNavigate();
 
+  // ---------- Formularios ----------
   const addForm = useForm({
     resolver: zodResolver(cutSchema),
     defaultValues: {
@@ -1031,27 +825,48 @@ function Cuts() {
     },
   });
 
+  const editForm = useForm({
+    resolver: zodResolver(cutSchema),
+    defaultValues: {
+      clientId: "",
+      barberId: "",
+      style: "",
+      notes: "",
+      photos: [],
+      keep: [],
+    },
+  });
+
   // ---------- Datos ----------
   useEffect(() => {
     (async () => {
-      const [clientList, barberList, cutList] = await Promise.all([
-        api("/clients"),
-        api("/barbers"),
-        api("/cuts"),
-      ]);
-      setClients(clientList);
-      setBarbers(barberList);
-      setCuts(cutList);
+      try {
+        const [clientsRes, barbersRes, cutsRes] = await Promise.all([
+          axios.get("/clients"),
+          axios.get("/barbers"),
+          axios.get("/cuts"),
+        ]);
+
+        setClients(clientsRes.data);
+        setBarbers(barbersRes.data);
+        setCuts(cutsRes.data);
+      } catch (err) {
+        console.error("Error al cargar datos:", err);
+      }
     })();
   }, []);
 
   const refreshCuts = async () => {
-    const updatedCuts = await api("/cuts");
-    setCuts(updatedCuts);
+    try {
+      const res = await axios.get("/cuts");
+      setCuts(res.data);
+    } catch (err) {
+      console.error("Error al refrescar cortes:", err);
+    }
   };
 
   // ---------- Fotos ----------
-  const handlePhotoUpload = (files) => {
+  const handlePhotoUpload = (files, form) => {
     const fileArray = Array.from(files || []);
     const readers = fileArray.map(
       (file) =>
@@ -1061,41 +876,91 @@ function Cuts() {
             resolve({
               base64: String(e.target.result).split(",")[1],
               mimeType: file.type,
-              preview: e.target.result, // URL para mostrar preview
+              preview: e.target.result,
             });
           reader.readAsDataURL(file);
         })
     );
     Promise.all(readers).then((photos) => {
-      const current = addForm.getValues("photos") || [];
-      addForm.setValue("photos", [...current, ...photos], {
+      const current = form.getValues("photos") || [];
+      form.setValue("photos", [...current, ...photos], {
         shouldValidate: true,
       });
     });
   };
 
-  const removePhoto = (index) => {
-    const updated = [...addForm.getValues("photos")];
+  const removePhoto = (index, form) => {
+    const updated = [...form.getValues("photos")];
     updated.splice(index, 1);
-    addForm.setValue("photos", updated, { shouldValidate: true });
+    form.setValue("photos", updated, { shouldValidate: true });
   };
 
   // ---------- Crear corte ----------
   const handleAddCut = async (data) => {
-    await api("/cuts", { method: "POST", body: data });
+    await toast.promise(axios.post("/cuts", data).then(refreshCuts), {
+      loading: "Guardando corte…",
+      success: "Corte creado",
+      error: "Error al crear corte",
+    });
+
     addForm.reset();
-    await refreshCuts();
     setIsAddOpen(false);
+  };
+
+  // ---------- Editar corte ----------
+  const openEdit = (cut) => {
+    setEditing(cut);
+    editForm.reset({
+      clientId: cut.clientId,
+      barberId: cut.barberId,
+      style: cut.style,
+      notes: cut.notes,
+      photos: [],
+      keep: cut.photos?.map((p) => p.id) || [],
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleRemoveOldPhoto = (pid) => {
+    const updated = editing.photos.filter((x) => x.id !== pid);
+    setEditing({ ...editing, photos: updated });
+    const keep = updated.map((x) => x.id);
+    editForm.setValue("keep", keep);
+  };
+
+  const handleEditCut = async (data) => {
+    const keep = editForm.getValues("keep") || [];
+
+    await toast.promise(
+      axios
+        .put(`/cuts/${editing.id}`, {
+          ...data,
+          keep,
+        })
+        .then(refreshCuts),
+      {
+        loading: "Actualizando corte…",
+        success: "Corte actualizado",
+        error: "Error al actualizar",
+      }
+    );
+
+    setIsEditOpen(false);
   };
 
   // ---------- Crear cliente/barbero ----------
   const handleCreateClient = async (name) => {
-    const newClient = await api("/clients", { method: "POST", body: { name } });
+    const res = await axios.post("/clients", { name });
+    const newClient = res.data;
+
     setClients((prev) => [...prev, newClient]);
     return { value: String(newClient.id), label: newClient.name };
   };
+
   const handleCreateBarber = async (name) => {
-    const newBarber = await api("/barbers", { method: "POST", body: { name } });
+    const res = await axios.post("/barbers", { name });
+    const newBarber = res.data;
+
     setBarbers((prev) => [...prev, newBarber]);
     return { value: String(newBarber.id), label: newBarber.name };
   };
@@ -1108,7 +973,7 @@ function Cuts() {
         onClick: async () => {
           await toast.promise(
             (async () => {
-              await api(`/cuts/${id}`, { method: "DELETE" });
+              await axios.delete(`/cuts/${id}`);
               await refreshCuts();
             })(),
             {
@@ -1133,44 +998,57 @@ function Cuts() {
       </div>
 
       {/* Listado */}
-      <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
-        {cuts.map((cut) => (
-          <div
-            key={cut.id}
-            className="hover:bg-muted/40 p-4 border rounded-lg transition-colors"
-          >
-            <h4 className="font-medium text-sm">
-              {cut.client?.name || "Sin cliente"}
-            </h4>
-            <p className="text-muted-foreground text-xs">
-              {cut.barber?.name || "-"}
-            </p>
-            <div className="flex justify-between mt-3 text-muted-foreground text-xs">
-              <span>{cut.style || "Sin estilo"}</span>
-              <div className="flex items-center gap-1">
-                <CameraIcon className="w-3 h-3" />
-                <span>{cut.photos?.length || 0}</span>
+      {cuts.length === 0 ? (
+        <div className="py-10 text-muted-foreground text-center">
+          No hay registros todavía.
+        </div>
+      ) : (
+        <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
+          {cuts.map((cut) => (
+            <div
+              key={cut.id}
+              className="hover:bg-muted/40 p-4 border rounded-lg transition-colors"
+            >
+              <h4 className="font-medium text-sm">
+                {cut.client?.name || "Sin cliente"}
+              </h4>
+              <p className="text-muted-foreground text-xs">
+                {cut.barber?.name || "-"}
+              </p>
+              <div className="flex justify-between mt-3 text-muted-foreground text-xs">
+                <span>{cut.style || "Sin estilo"}</span>
+                <div className="flex items-center gap-1">
+                  <CameraIcon className="w-3 h-3" />
+                  <span>{cut.photos?.length || 0}</span>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-3">
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => navigate(`/cuts/${cut.id}`)}
+                >
+                  <EyeIcon />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => openEdit(cut)}
+                >
+                  <PencilIcon />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => handleDeleteCut(cut.id)}
+                >
+                  <Trash2Icon className="text-destructive" />
+                </Button>
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-3">
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => navigate(`/dashboard/cuts/${cut.id}`)}
-              >
-                <EyeIcon />
-              </Button>
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => handleDeleteCut(cut.id)}
-              >
-                <Trash2Icon className="text-destructive" />
-              </Button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {/* Drawer: Añadir */}
       <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
@@ -1181,111 +1059,108 @@ function Cuts() {
               Completá los datos para registrar un nuevo corte.
             </DrawerDescription>
           </DrawerHeader>
+          <div className="flex-1 overflow-auto">
+            <form
+              id="formAddCut"
+              onSubmit={addForm.handleSubmit(handleAddCut)}
+              className="space-y-6 p-6"
+            >
+              <FieldSet>
+                <FieldLegend>Datos del corte</FieldLegend>
+                <div className="flex flex-col gap-4">
+                  {/* Cliente */}
+                  <Field data-invalid={!!addForm.formState.errors.clientId}>
+                    <FieldLabel>Cliente</FieldLabel>
+                    <ComboboxCreate
+                      value={addForm.watch("clientId")}
+                      onChange={(v) => addForm.setValue("clientId", v)}
+                      items={clients.map((c) => ({
+                        value: String(c.id),
+                        label: c.name,
+                      }))}
+                      placeholder="Selecciona o crea…"
+                      onCreate={handleCreateClient}
+                    />
+                    <FieldError>
+                      {addForm.formState.errors.clientId?.message}
+                    </FieldError>
+                  </Field>
 
-          <form
-            id="formAddCut"
-            onSubmit={addForm.handleSubmit(handleAddCut)}
-            className="flex-1 space-y-6 p-6 overflow-auto"
-          >
-            <FieldSet>
-              <FieldLegend>Datos del corte</FieldLegend>
-              <div className="flex flex-col gap-4">
-                {/* Cliente */}
-                <Field data-invalid={!!addForm.formState.errors.clientId}>
-                  <FieldLabel>Cliente</FieldLabel>
-                  <ComboboxCreate
-                    value={addForm.watch("clientId")}
-                    onChange={(v) => addForm.setValue("clientId", v)}
-                    items={clients.map((c) => ({
-                      value: String(c.id),
-                      label: c.name,
-                    }))}
-                    placeholder="Selecciona o crea…"
-                    onCreate={handleCreateClient}
-                  />
-                  <FieldError>
-                    {addForm.formState.errors.clientId?.message}
-                  </FieldError>
-                </Field>
+                  {/* Barbero */}
+                  <Field data-invalid={!!addForm.formState.errors.barberId}>
+                    <FieldLabel>Barbero</FieldLabel>
+                    <ComboboxCreate
+                      value={addForm.watch("barberId")}
+                      onChange={(v) => addForm.setValue("barberId", v)}
+                      items={barbers.map((b) => ({
+                        value: String(b.id),
+                        label: b.name,
+                      }))}
+                      placeholder="Selecciona o crea…"
+                      onCreate={handleCreateBarber}
+                    />
+                    <FieldError>
+                      {addForm.formState.errors.barberId?.message}
+                    </FieldError>
+                  </Field>
 
-                {/* Barbero */}
-                <Field data-invalid={!!addForm.formState.errors.barberId}>
-                  <FieldLabel>Barbero</FieldLabel>
-                  <ComboboxCreate
-                    value={addForm.watch("barberId")}
-                    onChange={(v) => addForm.setValue("barberId", v)}
-                    items={barbers.map((b) => ({
-                      value: String(b.id),
-                      label: b.name,
-                    }))}
-                    placeholder="Selecciona o crea…"
-                    onCreate={handleCreateBarber}
-                  />
-                  <FieldError>
-                    {addForm.formState.errors.barberId?.message}
-                  </FieldError>
-                </Field>
+                  {/* Estilo */}
+                  <Field data-invalid={!!addForm.formState.errors.style}>
+                    <FieldLabel>Estilo</FieldLabel>
+                    <Input
+                      placeholder="Fade medio, etc."
+                      {...addForm.register("style")}
+                    />
+                    <FieldError>
+                      {addForm.formState.errors.style?.message}
+                    </FieldError>
+                  </Field>
 
-                {/* Estilo */}
-                <Field data-invalid={!!addForm.formState.errors.style}>
-                  <FieldLabel>Estilo</FieldLabel>
-                  <Input
-                    placeholder="Fade medio, etc."
-                    {...addForm.register("style")}
-                  />
-                  <FieldError>
-                    {addForm.formState.errors.style?.message}
-                  </FieldError>
-                </Field>
+                  {/* Notas */}
+                  <Field>
+                    <FieldLabel>Notas</FieldLabel>
+                    <Input
+                      placeholder="Observaciones"
+                      {...addForm.register("notes")}
+                    />
+                  </Field>
 
-                {/* Notas */}
-                <Field>
-                  <FieldLabel>Notas</FieldLabel>
-                  <Input
-                    placeholder="Observaciones"
-                    {...addForm.register("notes")}
-                  />
-                </Field>
-
-                {/* Fotos con preview */}
-                <Field>
-                  <FieldLabel>Fotos</FieldLabel>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => handlePhotoUpload(e.target.files)}
-                  />
-                  <FieldDescription>
-                    Podés subir varias imágenes.
-                  </FieldDescription>
-
-                  {/* Previews */}
-                  {addForm.watch("photos")?.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {addForm.watch("photos").map((photo, i) => (
-                        <div key={i} className="group relative">
-                          <img
-                            src={photo.preview}
-                            alt={`Foto ${i + 1}`}
-                            className="border rounded-md w-20 h-20 object-cover"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removePhoto(i)}
-                            className="top-1 right-1 absolute bg-black/60 opacity-0 group-hover:opacity-100 p-1 rounded-full text-white transition"
-                          >
-                            <XIcon className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </Field>
-              </div>
-            </FieldSet>
-          </form>
-
+                  {/* Fotos */}
+                  <Field>
+                    <FieldLabel>Fotos</FieldLabel>
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) =>
+                        handlePhotoUpload(e.target.files, addForm)
+                      }
+                    />
+                    {addForm.watch("photos")?.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {addForm.watch("photos").map((photo, i) => (
+                          <div key={i} className="group relative">
+                            <img
+                              src={photo.preview}
+                              alt={`Foto ${i + 1}`}
+                              className="border rounded-md w-20 h-20 object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => removePhoto(i, addForm)}
+                              className="top-1 right-1 absolute bg-black/60 opacity-0 group-hover:opacity-100 p-1 rounded-full text-white transition"
+                            >
+                              <XIcon className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </Field>
+                </div>
+              </FieldSet>
+            </form>
+          </div>
           <DrawerFooter>
             <Button type="submit" form="formAddCut">
               Guardar
@@ -1294,6 +1169,115 @@ function Cuts() {
               <Button variant="outline" onClick={() => addForm.reset()}>
                 Cancelar
               </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Drawer: Editar */}
+      <Drawer open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Editar corte</DrawerTitle>
+          </DrawerHeader>
+
+          <form
+            id="formEditCut"
+            onSubmit={editForm.handleSubmit(handleEditCut)}
+            className="flex-1 space-y-6 p-6 overflow-auto"
+          >
+            <FieldLabel>Cliente</FieldLabel>
+            <ComboboxCreate
+              value={editForm.watch("clientId")}
+              onChange={(v) => editForm.setValue("clientId", v)}
+              items={clients.map((c) => ({
+                value: String(c.id),
+                label: c.name,
+              }))}
+              onCreate={handleCreateClient}
+            />
+
+            <FieldLabel>Barbero</FieldLabel>
+            <ComboboxCreate
+              value={editForm.watch("barberId")}
+              onChange={(v) => editForm.setValue("barberId", v)}
+              items={barbers.map((b) => ({
+                value: String(b.id),
+                label: b.name,
+              }))}
+              onCreate={handleCreateBarber}
+            />
+
+            <FieldLabel>Estilo</FieldLabel>
+            <Input {...editForm.register("style")} placeholder="Estilo" />
+
+            <FieldLabel>Notas</FieldLabel>
+            <Input {...editForm.register("notes")} placeholder="Notas" />
+
+            {/* Fotos existentes */}
+            <FieldLabel>Fotos existentes</FieldLabel>
+            {editing?.photos?.length > 0 ? (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {editing.photos.map((p) => (
+                  <div key={p.id} className="group relative">
+                    <img
+                      src={`/api/cuts/${editing.id}/photos/${p.id}/data`}
+                      alt="Foto existente"
+                      className="border rounded-md w-20 h-20 object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveOldPhoto(p.id)}
+                      className="top-1 right-1 absolute bg-black/60 opacity-0 group-hover:opacity-100 p-1 rounded-full text-white transition"
+                    >
+                      <XIcon className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Sin fotos guardadas
+              </p>
+            )}
+
+            {/* Fotos nuevas */}
+            <FieldLabel>Añadir fotos nuevas</FieldLabel>
+            <Input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => handlePhotoUpload(e.target.files, editForm)}
+            />
+            {editForm.watch("photos")?.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-3">
+                {editForm.watch("photos").map((photo, i) => (
+                  <div key={i} className="group relative">
+                    <img
+                      src={photo.preview}
+                      alt={`Nueva ${i + 1}`}
+                      className="border rounded-md w-20 h-20 object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(i, editForm)}
+                      className="top-1 right-1 absolute bg-black/60 opacity-0 group-hover:opacity-100 p-1 rounded-full text-white transition"
+                    >
+                      <XIcon className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </form>
+
+          <DrawerFooter>
+            <Button type="submit" form="formEditCut">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline">Cancelar</Button>
             </DrawerClose>
           </DrawerFooter>
         </DrawerContent>
@@ -1310,9 +1294,14 @@ function CutDetail() {
 
   useEffect(() => {
     (async () => {
-      const all = await api("/cuts");
-      const found = all.find((x) => String(x.id) === String(id));
-      setData(found || null);
+      try {
+        const res = await axios.get("/cuts");
+        const all = res.data;
+        const found = all.find((x) => String(x.id) === String(id));
+        setData(found || null);
+      } catch (err) {
+        console.error("Error al cargar los cortes:", err);
+      }
     })();
   }, [id]);
 
@@ -1326,8 +1315,11 @@ function CutDetail() {
         onClick: async () => {
           await toast.promise(
             (async () => {
-              await http.delete(`/cuts/${data.id}/photos/${pid}`);
-              const refreshed = await api("/cuts");
+              await axios.delete(`/cuts/${data.id}/photos/${pid}`);
+
+              const res = await axios.get("/cuts");
+              const refreshed = res.data;
+
               setData(refreshed.find((x) => x.id === data.id));
             })(),
             {
@@ -1355,7 +1347,7 @@ function CutDetail() {
           <h4 className="font-semibold text-base">
             {data.client?.id ? (
               <Link
-                to={`/dashboard/clients/${data.client.id}`}
+                to={`/clients/${data.client.id}`}
                 className="hover:underline"
               >
                 {data.client.name}
@@ -1368,7 +1360,7 @@ function CutDetail() {
           <p className="text-muted-foreground text-sm">
             {data.barber?.id ? (
               <Link
-                to={`/dashboard/barbers/${data.barber.id}`}
+                to={`/barbers/${data.barber.id}`}
                 className="hover:underline"
               >
                 {data.barber.name}
@@ -1436,6 +1428,210 @@ function CutDetail() {
   );
 }
 
+// ------------ Barbers ------------
+function Barbers() {
+  const [barbers, setBarbers] = useState([]);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const navigate = useNavigate();
+
+  const formAdd = useForm({
+    resolver: zodResolver(
+      z.object({
+        name: z.string().min(1, "Requerido"),
+        bio: z.string().optional(),
+      })
+    ),
+    defaultValues: { name: "", bio: "" },
+  });
+
+  const formEdit = useForm({
+    resolver: zodResolver(
+      z.object({
+        name: z.string().min(1, "Requerido"),
+        bio: z.string().optional(),
+      })
+    ),
+    defaultValues: { name: "", bio: "" },
+  });
+
+  useEffect(() => {
+    (async () => {
+      const res = await axios.get("/barbers");
+      setBarbers(res.data);
+    })();
+  }, []);
+
+  const refresh = async () => {
+    const res = await axios.get("/barbers");
+    setBarbers(res.data);
+  };
+
+  const onSubmitAdd = async (data) => {
+    await axios.post("/barbers", data);
+    formAdd.reset();
+    await refresh();
+    setIsAddOpen(false);
+  };
+
+  const onSubmitEdit = async (data) => {
+    await toast.promise(
+      axios.put(`/barbers/${editing.id}`, data).then(refresh),
+      {
+        loading: "Guardando cambios…",
+        success: "Barbero actualizado",
+        error: "Error al actualizar",
+      }
+    );
+    setIsEditOpen(false);
+  };
+
+  const handleDelete = (id) => {
+    toast("¿Eliminar barbero?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () =>
+          await toast.promise(axios.delete(`/barbers/${id}`).then(refresh), {
+            loading: "Eliminando…",
+            success: "Barbero eliminado",
+            error: "Error al eliminar",
+          }),
+      },
+    });
+  };
+
+  const openEdit = (barber) => {
+    setEditing(barber);
+    formEdit.reset(barber);
+    setIsEditOpen(true);
+  };
+
+  return (
+    <>
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-lg">Barberos</h3>
+        <Button onClick={() => setIsAddOpen(true)}>
+          <PlusIcon /> Añadir
+        </Button>
+      </div>
+
+      {barbers.length === 0 ? (
+        <div className="py-10 text-muted-foreground text-center">
+          No hay registros todavía.
+        </div>
+      ) : (
+        <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
+          {barbers.map((b) => (
+            <div
+              key={b.id}
+              className="hover:bg-muted/40 p-4 border rounded-lg transition"
+            >
+              <h4 className="font-medium text-sm">{b.name}</h4>
+              <p className="text-muted-foreground text-xs">
+                {b.bio || "Sin bio"}
+              </p>
+              <div className="flex justify-end gap-2 mt-3">
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => navigate(`/barbers/${b.id}`)}
+                >
+                  <EyeIcon />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => openEdit(b)}
+                >
+                  <PencilIcon />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => handleDelete(b.id)}
+                >
+                  <Trash2Icon className="text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Drawer Añadir */}
+      <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Nuevo barbero</DrawerTitle>
+          </DrawerHeader>
+          <form
+            id="formAddBarber"
+            onSubmit={formAdd.handleSubmit(onSubmitAdd)}
+            className="space-y-4 p-6"
+          >
+            <Field>
+              <FieldLabel>Nombre</FieldLabel>
+              <Input {...formAdd.register("name")} placeholder="Nombre" />
+              <FieldError>{formAdd.formState.errors.name?.message}</FieldError>
+            </Field>
+            <Field>
+              <FieldLabel>Bio</FieldLabel>
+              <Textarea
+                {...formAdd.register("bio")}
+                placeholder="Descripción corta"
+              />
+            </Field>
+          </form>
+          <DrawerFooter>
+            <Button type="submit" form="formAddBarber">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline">Cancelar</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Drawer Editar */}
+      <Drawer open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Editar barbero</DrawerTitle>
+          </DrawerHeader>
+          <form
+            id="formEditBarber"
+            onSubmit={formEdit.handleSubmit(onSubmitEdit)}
+            className="space-y-4 p-6"
+          >
+            <Field>
+              <FieldLabel>Nombre</FieldLabel>
+              <Input {...formEdit.register("name")} placeholder="Nombre" />
+              <FieldError>{formEdit.formState.errors.name?.message}</FieldError>
+            </Field>
+            <Field>
+              <FieldLabel>Bio</FieldLabel>
+              <Textarea
+                {...formEdit.register("bio")}
+                placeholder="Descripción corta"
+              />
+            </Field>
+          </form>
+          <DrawerFooter>
+            <Button type="submit" form="formEditBarber">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline">Cancelar</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </>
+  );
+}
+
 // ------------ BarberDetail ------------
 function BarberDetail() {
   const { id } = useParams();
@@ -1445,19 +1641,28 @@ function BarberDetail() {
 
   useEffect(() => {
     (async () => {
-      const [barbers, allCuts] = await Promise.all([
-        api("/barbers"),
-        api("/cuts"),
-      ]);
-      const b = barbers.find((x) => String(x.id) === String(id));
-      setBarber(b || null);
-      setCuts(
-        allCuts.filter(
-          (c) =>
-            String(c.barberId) === String(id) ||
-            String(c.barber?.id ?? "") === String(id)
-        )
-      );
+      try {
+        const [barbersRes, cutsRes] = await Promise.all([
+          axios.get("/barbers"),
+          axios.get("/cuts"),
+        ]);
+
+        const barbers = barbersRes.data;
+        const allCuts = cutsRes.data;
+
+        const b = barbers.find((x) => String(x.id) === String(id));
+        setBarber(b || null);
+
+        setCuts(
+          allCuts.filter(
+            (c) =>
+              String(c.barberId) === String(id) ||
+              String(c.barber?.id ?? "") === String(id)
+          )
+        );
+      } catch (err) {
+        console.error("Error cargando datos:", err);
+      }
     })();
   }, [id]);
 
@@ -1470,7 +1675,7 @@ function BarberDetail() {
         label: "Eliminar",
         onClick: async () =>
           await toast.promise(
-            api(`/cuts/${cutId}`, { method: "DELETE" }).then(() => {
+            axios.delete(`/cuts/${cutId}`).then(() => {
               setCuts((prev) => prev.filter((x) => x.id !== cutId));
             }),
             {
@@ -1528,7 +1733,7 @@ function BarberDetail() {
                     <Button
                       size="icon"
                       variant="outline"
-                      onClick={() => navigate(`/dashboard/cuts/${c.id}`)}
+                      onClick={() => navigate(`/cuts/${c.id}`)}
                     >
                       <EyeIcon />
                     </Button>
@@ -1557,48 +1762,83 @@ function BarberDetail() {
 function Clients() {
   const [clients, setClients] = useState([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const navigate = useNavigate();
 
-  const form = useForm({
-    resolver: zodResolver(
-      z.object({
-        name: z.string().min(1, "Requerido"),
-        phone: z.string().optional(),
-        notes: z.string().optional(),
-      })
-    ),
+  // ---------- Validación ----------
+  const schema = z.object({
+    name: z.string().min(1, "Requerido"),
+    phone: z.string().optional(),
+    notes: z.string().optional(),
+  });
+
+  const formAdd = useForm({
+    resolver: zodResolver(schema),
     defaultValues: { name: "", phone: "", notes: "" },
   });
 
-  useEffect(() => {
-    (async () => setClients(await api("/clients")))();
-  }, []);
-  const refresh = async () => setClients(await api("/clients"));
+  const formEdit = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { name: "", phone: "", notes: "" },
+  });
 
-  const onSubmit = async (data) => {
-    await api("/clients", { method: "POST", body: data });
-    form.reset();
+  // ---------- Cargar clientes ----------
+  useEffect(() => {
+    (async () => {
+      const res = await axios.get("/clients");
+      setClients(res.data);
+    })();
+  }, []);
+
+  const refresh = async () => {
+    const res = await axios.get("/clients");
+    setClients(res.data);
+  };
+
+  // ---------- Crear ----------
+  const onSubmitAdd = async (data) => {
+    await axios.post("/clients", data);
+    formAdd.reset();
     await refresh();
     setIsAddOpen(false);
   };
 
+  // ---------- Editar ----------
+  const onSubmitEdit = async (data) => {
+    await toast.promise(
+      axios.put(`/clients/${editing.id}`, data).then(refresh),
+      {
+        loading: "Guardando cambios…",
+        success: "Cliente actualizado",
+        error: "Error al actualizar",
+      }
+    );
+    setIsEditOpen(false);
+  };
+
+  const openEdit = (client) => {
+    setEditing(client);
+    formEdit.reset(client);
+    setIsEditOpen(true);
+  };
+
+  // ---------- Eliminar ----------
   const handleDelete = (id) => {
     toast("¿Eliminar cliente?", {
       action: {
         label: "Eliminar",
         onClick: async () =>
-          await toast.promise(
-            api(`/clients/${id}`, { method: "DELETE" }).then(refresh),
-            {
-              loading: "Eliminando…",
-              success: "Cliente eliminado",
-              error: "Error al eliminar",
-            }
-          ),
+          await toast.promise(axios.delete(`/clients/${id}`).then(refresh), {
+            loading: "Eliminando…",
+            success: "Cliente eliminado",
+            error: "Error al eliminar",
+          }),
       },
     });
   };
 
+  // ---------- Render ----------
   return (
     <>
       <div className="flex justify-between items-center">
@@ -1608,34 +1848,48 @@ function Clients() {
         </Button>
       </div>
 
-      <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
-        {clients.map((c) => (
-          <div
-            key={c.id}
-            className="hover:bg-muted/40 p-4 border rounded-lg transition"
-          >
-            <h4 className="font-medium text-sm">{c.name}</h4>
-            <p className="text-muted-foreground text-xs">{c.phone || "-"}</p>
-            <div className="flex justify-end gap-2 mt-3">
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => navigate(`/dashboard/clients/${c.id}`)}
-              >
-                <EyeIcon />
-              </Button>
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => handleDelete(c.id)}
-              >
-                <Trash2Icon className="text-destructive" />
-              </Button>
+      {clients.length === 0 ? (
+        <div className="py-10 text-muted-foreground text-center">
+          No hay registros todavía.
+        </div>
+      ) : (
+        <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
+          {clients.map((c) => (
+            <div
+              key={c.id}
+              className="hover:bg-muted/40 p-4 border rounded-lg transition"
+            >
+              <h4 className="font-medium text-sm">{c.name}</h4>
+              <p className="text-muted-foreground text-xs">{c.phone || "-"}</p>
+              <div className="flex justify-end gap-2 mt-3">
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => navigate(`/clients/${c.id}`)}
+                >
+                  <EyeIcon />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => openEdit(c)}
+                >
+                  <PencilIcon />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => handleDelete(c.id)}
+                >
+                  <Trash2Icon className="text-destructive" />
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
+      {/* Drawer Añadir */}
       <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DrawerContent>
           <DrawerHeader>
@@ -1643,25 +1897,67 @@ function Clients() {
           </DrawerHeader>
           <form
             id="formAddClient"
-            onSubmit={form.handleSubmit(onSubmit)}
+            onSubmit={formAdd.handleSubmit(onSubmitAdd)}
             className="space-y-4 p-6"
           >
             <Field>
               <FieldLabel>Nombre</FieldLabel>
-              <Input {...form.register("name")} placeholder="Nombre" />
-              <FieldError>{form.formState.errors.name?.message}</FieldError>
+              <Input {...formAdd.register("name")} placeholder="Nombre" />
+              <FieldError>{formAdd.formState.errors.name?.message}</FieldError>
             </Field>
             <Field>
               <FieldLabel>Teléfono</FieldLabel>
-              <Input {...form.register("phone")} placeholder="+54 9 ..." />
+              <Input {...formAdd.register("phone")} placeholder="+54 9 ..." />
             </Field>
             <Field>
               <FieldLabel>Notas</FieldLabel>
-              <Input {...form.register("notes")} placeholder="Observaciones" />
+              <Input
+                {...formAdd.register("notes")}
+                placeholder="Observaciones"
+              />
             </Field>
           </form>
           <DrawerFooter>
             <Button type="submit" form="formAddClient">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline">Cancelar</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Drawer Editar */}
+      <Drawer open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Editar cliente</DrawerTitle>
+          </DrawerHeader>
+          <form
+            id="formEditClient"
+            onSubmit={formEdit.handleSubmit(onSubmitEdit)}
+            className="space-y-4 p-6"
+          >
+            <Field>
+              <FieldLabel>Nombre</FieldLabel>
+              <Input {...formEdit.register("name")} placeholder="Nombre" />
+              <FieldError>{formEdit.formState.errors.name?.message}</FieldError>
+            </Field>
+            <Field>
+              <FieldLabel>Teléfono</FieldLabel>
+              <Input {...formEdit.register("phone")} placeholder="+54 9 ..." />
+            </Field>
+            <Field>
+              <FieldLabel>Notas</FieldLabel>
+              <Input
+                {...formEdit.register("notes")}
+                placeholder="Observaciones"
+              />
+            </Field>
+          </form>
+          <DrawerFooter>
+            <Button type="submit" form="formEditClient">
               Guardar
             </Button>
             <DrawerClose asChild>
@@ -1683,19 +1979,28 @@ function ClientDetail() {
 
   useEffect(() => {
     (async () => {
-      const [clients, allCuts] = await Promise.all([
-        api("/clients"),
-        api("/cuts"),
-      ]);
-      const c = clients.find((x) => String(x.id) === String(id));
-      setClient(c || null);
-      setCuts(
-        allCuts.filter(
-          (x) =>
-            String(x.clientId) === String(id) ||
-            String(x.client?.id ?? "") === String(id)
-        )
-      );
+      try {
+        const [clientsRes, cutsRes] = await Promise.all([
+          axios.get("/clients"),
+          axios.get("/cuts"),
+        ]);
+
+        const clients = clientsRes.data;
+        const allCuts = cutsRes.data;
+
+        const c = clients.find((x) => String(x.id) === String(id));
+        setClient(c || null);
+
+        setCuts(
+          allCuts.filter(
+            (x) =>
+              String(x.clientId) === String(id) ||
+              String(x.client?.id ?? "") === String(id)
+          )
+        );
+      } catch (err) {
+        console.error("Error cargando datos:", err);
+      }
     })();
   }, [id]);
 
@@ -1708,7 +2013,7 @@ function ClientDetail() {
         label: "Eliminar",
         onClick: async () =>
           await toast.promise(
-            api(`/cuts/${cutId}`, { method: "DELETE" }).then(() => {
+            axios.delete(`/cuts/${cutId}`).then(() => {
               setCuts((prev) => prev.filter((x) => x.id !== cutId));
             }),
             {
@@ -1775,7 +2080,7 @@ function ClientDetail() {
                     <Button
                       size="icon"
                       variant="outline"
-                      onClick={() => navigate(`/dashboard/cuts/${c.id}`)}
+                      onClick={() => navigate(`/cuts/${c.id}`)}
                     >
                       <EyeIcon />
                     </Button>
@@ -1801,19 +2106,8 @@ function ClientDetail() {
   );
 }
 
-// ------------ NotFound ------------
-function NotFound({ user }) {
-  return (
-    <div className="p-6">
-      <h3 className="font-semibold text-lg">404</h3>
-      <p>Página no encontrada.</p>
-      <div className="mt-3">
-        <Button asChild>
-          <Link to={user ? "/dashboard/barbers" : "/login"}>Volver</Link>
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>
+);

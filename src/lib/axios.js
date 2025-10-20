@@ -6,18 +6,16 @@ axios.defaults.withCredentials = true; // 🔥 clave: envía cookies automática
 
 // Interceptor de respuesta para manejar expiración de sesión
 axios.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (
-      error.response &&
-      (error.response.status === 401 || error.response.status === 403)
-    ) {
-      // Redirigir si la sesión expiró o es inválida
-      if (window.location.pathname !== "/login") {
+  (res) => res,
+  (err) => {
+    const { response } = err;
+    if (response?.status === 401 || response?.status === 403) {
+      const current = window.location.pathname;
+      if (!current.startsWith("/login") && !current.startsWith("/reset")) {
         window.location.replace("/login");
       }
     }
-    return Promise.reject(error);
+    return Promise.reject(err);
   }
 );
 
