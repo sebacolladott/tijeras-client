@@ -1,6 +1,8 @@
-// main.jsx
+// ---------- Core ----------
 import React, { useState, useEffect } from "react";
 import ReactDOM from "react-dom/client";
+
+// ---------- Router ----------
 import {
   BrowserRouter,
   Routes,
@@ -12,57 +14,21 @@ import {
   useParams,
   Outlet,
 } from "react-router";
+
+// ---------- Utils & Hooks ----------
 import axios from "@/lib/axios";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Toaster } from "@/components/ui/sonner";
+import { toast } from "sonner";
+import { useUserStore } from "@/stores/userStore";
 
-// shadcn/ui
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarTrigger,
-  SidebarHeader,
-  SidebarContent,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarRail,
-  SidebarInset,
-} from "@/components/ui/sidebar";
+// ---------- shadcn/ui Components ----------
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Command,
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-  CommandShortcut,
-} from "@/components/ui/command";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
-  Form,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormControl,
-  FormMessage,
-} from "@/components/ui/form";
+import { Switch } from "@/components/ui/switch";
 import {
   Drawer,
   DrawerClose,
@@ -73,6 +39,12 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Field,
   FieldContent,
@@ -85,8 +57,43 @@ import {
   FieldSet,
   FieldTitle,
 } from "@/components/ui/field";
+import {
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Command,
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+  CommandShortcut,
+} from "@/components/ui/command";
+import {
+  SidebarProvider,
+  Sidebar,
+  SidebarTrigger,
+  SidebarHeader,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarFooter,
+  SidebarRail,
+  SidebarInset,
+} from "@/components/ui/sidebar";
 
-import { useUserStore } from "@/stores/userStore";
+// ---------- Icons ----------
 import {
   ArrowLeftIcon,
   CameraIcon,
@@ -97,14 +104,15 @@ import {
   PlusIcon,
   RectangleEllipsisIcon,
   ScissorsIcon,
+  ShieldIcon,
   Trash2Icon,
   UserPlusIcon,
   UsersIcon,
   XIcon,
 } from "lucide-react";
+
+// ---------- Custom Components ----------
 import ComboboxCreate from "./components/ComboboxCreate";
-import { toast } from "sonner";
-import { Switch } from "./components/ui/switch";
 
 const API = axios.defaults.baseURL;
 
@@ -203,7 +211,7 @@ function AppSidebar() {
   const fetchUsers = async () => {
     setLoadingUsers(true);
     try {
-      const res = await axios.get("/auth/users");
+      const res = await axios.get("/users");
       setUsers(res.data);
     } catch {
       toast.error("Error al cargar usuarios");
@@ -215,7 +223,7 @@ function AppSidebar() {
   const deleteUser = async (id) => {
     if (!confirm("¿Eliminar este usuario?")) return;
     try {
-      await axios.delete(`/auth/users/${id}`);
+      await axios.delete(`/users/${id}`);
       toast.success("Usuario eliminado");
       setUsers((prev) => prev.filter((u) => u.id !== id));
     } catch {
@@ -226,7 +234,7 @@ function AppSidebar() {
   const toggleRole = async (user) => {
     const newRole = user.role === "ADMIN" ? "USER" : "ADMIN";
     try {
-      await axios.put(`/auth/users/${user.id}`, {
+      await axios.put(`/users/${user.id}`, {
         email: user.email,
         role: newRole,
       });
@@ -353,7 +361,7 @@ function AppSidebar() {
           <form
             id="changingForm"
             onSubmit={changeForm.handleSubmit(changePass)}
-            className="space-y-6 p-4"
+            className="flex-1 space-y-6 p-6 overflow-auto"
           >
             <FieldSet>
               <FieldLegend>Actualizar contraseña</FieldLegend>
@@ -419,7 +427,7 @@ function AppSidebar() {
           <form
             id="registerForm"
             onSubmit={registerForm.handleSubmit(registerUser)}
-            className="space-y-6 p-4"
+            className="flex-1 space-y-6 p-6 overflow-auto"
           >
             <FieldSet>
               <FieldLegend>Datos del usuario</FieldLegend>
@@ -495,42 +503,46 @@ function AppSidebar() {
           ) : (
             <>
               <CommandGroup heading="Usuarios">
-                {users.map((u) => (
-                  <CommandItem
-                    key={u.id}
-                    className="flex justify-between items-center"
-                  >
-                    <div>
-                      <span className="font-medium">{u.email}</span>
-                      <span className="ml-2 text-muted-foreground text-xs">
-                        {u.role}
-                      </span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant={u.role === "ADMIN" ? "secondary" : "outline"}
-                        onClick={() => toggleRole(u)}
-                      >
-                        {u.role === "ADMIN" ? "Quitar admin" : "Hacer admin"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="destructive"
-                        onClick={() => deleteUser(u.id)}
-                      >
-                        Eliminar
-                      </Button>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
+                {users
+                  .filter((u) => u.id !== user?.id)
+                  .map((u) => (
+                    <CommandItem
+                      key={u.id}
+                      className="flex justify-between items-center px-2 py-1.5"
+                    >
+                      <div className="flex flex-col">
+                        <span className="font-medium text-sm">{u.email}</span>
+                        <span className="text-[11px] text-muted-foreground uppercase tracking-wide">
+                          {u.role}
+                        </span>
+                      </div>
 
-              <CommandSeparator />
-              <CommandGroup heading="Acciones">
-                <CommandItem onSelect={() => setIsUsersOpen(false)}>
-                  Cerrar
-                </CommandItem>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="icon"
+                          variant={u.role === "ADMIN" ? "secondary" : "outline"}
+                          className="w-7 h-7"
+                          title={
+                            u.role === "ADMIN"
+                              ? "Quitar rol de admin"
+                              : "Hacer administrador"
+                          }
+                          onClick={() => toggleRole(u)}
+                        >
+                          <ShieldIcon className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          className="w-7 h-7"
+                          title="Eliminar usuario"
+                          onClick={() => deleteUser(u.id)}
+                        >
+                          <Trash2Icon className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </CommandItem>
+                  ))}
               </CommandGroup>
             </>
           )}
@@ -1005,10 +1017,7 @@ function Cuts() {
       ) : (
         <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
           {cuts.map((cut) => (
-            <div
-              key={cut.id}
-              className="hover:bg-muted/40 p-4 border rounded-lg transition-colors"
-            >
+            <div key={cut.id} className="p-4 border rounded-lg">
               <h4 className="font-medium text-sm">
                 {cut.client?.name || "Sin cliente"}
               </h4>
@@ -1059,108 +1068,104 @@ function Cuts() {
               Completá los datos para registrar un nuevo corte.
             </DrawerDescription>
           </DrawerHeader>
-          <div className="flex-1 overflow-auto">
-            <form
-              id="formAddCut"
-              onSubmit={addForm.handleSubmit(handleAddCut)}
-              className="space-y-6 p-6"
-            >
-              <FieldSet>
-                <FieldLegend>Datos del corte</FieldLegend>
-                <div className="flex flex-col gap-4">
-                  {/* Cliente */}
-                  <Field data-invalid={!!addForm.formState.errors.clientId}>
-                    <FieldLabel>Cliente</FieldLabel>
-                    <ComboboxCreate
-                      value={addForm.watch("clientId")}
-                      onChange={(v) => addForm.setValue("clientId", v)}
-                      items={clients.map((c) => ({
-                        value: String(c.id),
-                        label: c.name,
-                      }))}
-                      placeholder="Selecciona o crea…"
-                      onCreate={handleCreateClient}
-                    />
-                    <FieldError>
-                      {addForm.formState.errors.clientId?.message}
-                    </FieldError>
-                  </Field>
+          <form
+            id="formAddCut"
+            onSubmit={addForm.handleSubmit(handleAddCut)}
+            className="flex-1 space-y-6 p-6 overflow-auto"
+          >
+            <FieldSet>
+              <FieldLegend>Datos del corte</FieldLegend>
+              <div className="flex flex-col gap-4">
+                {/* Cliente */}
+                <Field data-invalid={!!addForm.formState.errors.clientId}>
+                  <FieldLabel>Cliente</FieldLabel>
+                  <ComboboxCreate
+                    value={addForm.watch("clientId")}
+                    onChange={(v) => addForm.setValue("clientId", v)}
+                    items={clients.map((c) => ({
+                      value: String(c.id),
+                      label: c.name,
+                    }))}
+                    placeholder="Selecciona o crea…"
+                    onCreate={handleCreateClient}
+                  />
+                  <FieldError>
+                    {addForm.formState.errors.clientId?.message}
+                  </FieldError>
+                </Field>
 
-                  {/* Barbero */}
-                  <Field data-invalid={!!addForm.formState.errors.barberId}>
-                    <FieldLabel>Barbero</FieldLabel>
-                    <ComboboxCreate
-                      value={addForm.watch("barberId")}
-                      onChange={(v) => addForm.setValue("barberId", v)}
-                      items={barbers.map((b) => ({
-                        value: String(b.id),
-                        label: b.name,
-                      }))}
-                      placeholder="Selecciona o crea…"
-                      onCreate={handleCreateBarber}
-                    />
-                    <FieldError>
-                      {addForm.formState.errors.barberId?.message}
-                    </FieldError>
-                  </Field>
+                {/* Barbero */}
+                <Field data-invalid={!!addForm.formState.errors.barberId}>
+                  <FieldLabel>Barbero</FieldLabel>
+                  <ComboboxCreate
+                    value={addForm.watch("barberId")}
+                    onChange={(v) => addForm.setValue("barberId", v)}
+                    items={barbers.map((b) => ({
+                      value: String(b.id),
+                      label: b.name,
+                    }))}
+                    placeholder="Selecciona o crea…"
+                    onCreate={handleCreateBarber}
+                  />
+                  <FieldError>
+                    {addForm.formState.errors.barberId?.message}
+                  </FieldError>
+                </Field>
 
-                  {/* Estilo */}
-                  <Field data-invalid={!!addForm.formState.errors.style}>
-                    <FieldLabel>Estilo</FieldLabel>
-                    <Input
-                      placeholder="Fade medio, etc."
-                      {...addForm.register("style")}
-                    />
-                    <FieldError>
-                      {addForm.formState.errors.style?.message}
-                    </FieldError>
-                  </Field>
+                {/* Estilo */}
+                <Field data-invalid={!!addForm.formState.errors.style}>
+                  <FieldLabel>Estilo</FieldLabel>
+                  <Input
+                    placeholder="Fade medio, etc."
+                    {...addForm.register("style")}
+                  />
+                  <FieldError>
+                    {addForm.formState.errors.style?.message}
+                  </FieldError>
+                </Field>
 
-                  {/* Notas */}
-                  <Field>
-                    <FieldLabel>Notas</FieldLabel>
-                    <Input
-                      placeholder="Observaciones"
-                      {...addForm.register("notes")}
-                    />
-                  </Field>
+                {/* Notas */}
+                <Field>
+                  <FieldLabel>Notas</FieldLabel>
+                  <Input
+                    placeholder="Observaciones"
+                    {...addForm.register("notes")}
+                  />
+                </Field>
 
-                  {/* Fotos */}
-                  <Field>
-                    <FieldLabel>Fotos</FieldLabel>
-                    <Input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={(e) =>
-                        handlePhotoUpload(e.target.files, addForm)
-                      }
-                    />
-                    {addForm.watch("photos")?.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-3">
-                        {addForm.watch("photos").map((photo, i) => (
-                          <div key={i} className="group relative">
-                            <img
-                              src={photo.preview}
-                              alt={`Foto ${i + 1}`}
-                              className="border rounded-md w-20 h-20 object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removePhoto(i, addForm)}
-                              className="top-1 right-1 absolute bg-black/60 opacity-0 group-hover:opacity-100 p-1 rounded-full text-white transition"
-                            >
-                              <XIcon className="w-3 h-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </Field>
-                </div>
-              </FieldSet>
-            </form>
-          </div>
+                {/* Fotos */}
+                <Field>
+                  <FieldLabel>Fotos</FieldLabel>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => handlePhotoUpload(e.target.files, addForm)}
+                  />
+                  {addForm.watch("photos")?.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {addForm.watch("photos").map((photo, i) => (
+                        <div key={i} className="group relative">
+                          <img
+                            src={photo.preview}
+                            alt={`Foto ${i + 1}`}
+                            className="border rounded-md w-20 h-20 object-cover"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removePhoto(i, addForm)}
+                            className="top-1 right-1 absolute bg-black/60 opacity-0 group-hover:opacity-100 p-1 rounded-full text-white transition"
+                          >
+                            <XIcon className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Field>
+              </div>
+            </FieldSet>
+          </form>
           <DrawerFooter>
             <Button type="submit" form="formAddCut">
               Guardar
@@ -1523,10 +1528,7 @@ function Barbers() {
       ) : (
         <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
           {barbers.map((b) => (
-            <div
-              key={b.id}
-              className="hover:bg-muted/40 p-4 border rounded-lg transition"
-            >
+            <div key={b.id} className="p-4 border rounded-lg">
               <h4 className="font-medium text-sm">{b.name}</h4>
               <p className="text-muted-foreground text-xs">
                 {b.bio || "Sin bio"}
@@ -1568,7 +1570,7 @@ function Barbers() {
           <form
             id="formAddBarber"
             onSubmit={formAdd.handleSubmit(onSubmitAdd)}
-            className="space-y-4 p-6"
+            className="flex-1 space-y-6 p-6 overflow-auto"
           >
             <Field>
               <FieldLabel>Nombre</FieldLabel>
@@ -1603,7 +1605,7 @@ function Barbers() {
           <form
             id="formEditBarber"
             onSubmit={formEdit.handleSubmit(onSubmitEdit)}
-            className="space-y-4 p-6"
+            className="flex-1 space-y-6 p-6 overflow-auto"
           >
             <Field>
               <FieldLabel>Nombre</FieldLabel>
@@ -1855,10 +1857,7 @@ function Clients() {
       ) : (
         <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
           {clients.map((c) => (
-            <div
-              key={c.id}
-              className="hover:bg-muted/40 p-4 border rounded-lg transition"
-            >
+            <div key={c.id} className="p-4 border rounded-lg">
               <h4 className="font-medium text-sm">{c.name}</h4>
               <p className="text-muted-foreground text-xs">{c.phone || "-"}</p>
               <div className="flex justify-end gap-2 mt-3">
@@ -1898,7 +1897,7 @@ function Clients() {
           <form
             id="formAddClient"
             onSubmit={formAdd.handleSubmit(onSubmitAdd)}
-            className="space-y-4 p-6"
+            className="flex-1 space-y-6 p-6 overflow-auto"
           >
             <Field>
               <FieldLabel>Nombre</FieldLabel>
@@ -1937,7 +1936,7 @@ function Clients() {
           <form
             id="formEditClient"
             onSubmit={formEdit.handleSubmit(onSubmitEdit)}
-            className="space-y-4 p-6"
+            className="flex-1 space-y-6 p-6 overflow-auto"
           >
             <Field>
               <FieldLabel>Nombre</FieldLabel>
