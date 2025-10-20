@@ -13,7 +13,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/api": "https://vps-5402059-x.dattaweb.com",
+      "/api": "https://api.tijeras.imeatara.com",
     },
   },
 });
