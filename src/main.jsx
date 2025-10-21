@@ -103,6 +103,7 @@ import {
   KeyRoundIcon,
   LogInIcon,
   LogOutIcon,
+  MailIcon,
   PencilIcon,
   PlusIcon,
   RectangleEllipsisIcon,
@@ -667,7 +668,10 @@ function Login() {
             <FieldGroup className="space-y-2">
               {/* Email */}
               <Field>
-                <FieldLabel>Email</FieldLabel>
+                <FieldLabel>
+                  <MailIcon className="w-4 h-4 text-primary" />
+                  Email
+                </FieldLabel>
                 <Input
                   type="email"
                   autoComplete="off"
@@ -681,7 +685,10 @@ function Login() {
 
               {/* Contraseña */}
               <Field>
-                <FieldLabel>Contraseña</FieldLabel>
+                <FieldLabel>
+                  <KeyRoundIcon className="w-4 h-4 text-primary" />
+                  Contraseña
+                </FieldLabel>
                 <Input
                   type="password"
                   placeholder="••••••••"
