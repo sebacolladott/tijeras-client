@@ -125,7 +125,7 @@ import "react-photo-view/dist/react-photo-view.css";
 // ---------- Custom Components ----------
 import ComboboxCreate from "./components/ComboboxCreate";
 
-const API = "https://vps-5402059-x.dattaweb.com/";
+const API = "https://vps-5402059-x.dattaweb.com/api";
 
 // ------------ Schemas ------------
 const loginSchema = z.object({
