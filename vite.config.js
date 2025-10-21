@@ -11,9 +11,4 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-  server: {
-    proxy: {
-      "/api": "https://api.tijeras.imeatara.com",
-    },
-  },
 });
