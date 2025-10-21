@@ -98,23 +98,33 @@ import {
   ArrowLeftIcon,
   CameraIcon,
   ChevronsUpDownIcon,
+  CircleUserRoundIcon,
   EyeIcon,
+  KeyRoundIcon,
+  LogInIcon,
   LogOutIcon,
   PencilIcon,
   PlusIcon,
   RectangleEllipsisIcon,
+  RotateCcwIcon,
   ScissorsIcon,
+  SendIcon,
   ShieldIcon,
+  SquareScissorsIcon,
+  SquareUserIcon,
   Trash2Icon,
   UserPlusIcon,
   UsersIcon,
   XIcon,
 } from "lucide-react";
 
+import { PhotoProvider, PhotoView } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
+
 // ---------- Custom Components ----------
 import ComboboxCreate from "./components/ComboboxCreate";
 
-const API = axios.defaults.baseURL;
+const API = "https://api.tijeras.imeatara.com/api";
 
 // ------------ Schemas ------------
 const loginSchema = z.object({
@@ -220,15 +230,25 @@ function AppSidebar() {
     }
   };
 
-  const deleteUser = async (id) => {
-    if (!confirm("¿Eliminar este usuario?")) return;
-    try {
-      await axios.delete(`/users/${id}`);
-      toast.success("Usuario eliminado");
-      setUsers((prev) => prev.filter((u) => u.id !== id));
-    } catch {
-      toast.error("Error al eliminar");
-    }
+  const deleteUser = (id) => {
+    toast("¿Eliminar usuario?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          await toast.promise(
+            (async () => {
+              await axios.delete(`/users/${id}`);
+              setUsers((prev) => prev.filter((u) => u.id !== id));
+            })(),
+            {
+              loading: "Eliminando usuario…",
+              success: "Usuario eliminado",
+              error: "Error al eliminar",
+            }
+          );
+        },
+      },
+    });
   };
 
   const toggleRole = async (user) => {
@@ -316,17 +336,26 @@ function AppSidebar() {
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/cuts")}>
-                    <Link to="/cuts">Cortes</Link>
+                    <Link to="/cuts">
+                      <SquareScissorsIcon />
+                      Cortes
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/barbers")}>
-                    <Link to="/barbers">Barberos</Link>
+                    <Link to="/barbers">
+                      <SquareUserIcon />
+                      Barberos
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/clients")}>
-                    <Link to="/clients">Clientes</Link>
+                    <Link to="/clients">
+                      <CircleUserRoundIcon />
+                      Clientes
+                    </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
@@ -364,8 +393,7 @@ function AppSidebar() {
             className="flex-1 space-y-6 p-6 overflow-auto"
           >
             <FieldSet>
-              <FieldLegend>Actualizar contraseña</FieldLegend>
-              <FieldGroup className="flex flex-col gap-4">
+              <FieldGroup className="space-y-2">
                 <Field>
                   <FieldLabel htmlFor="oldPassword">
                     Contraseña actual
@@ -430,8 +458,7 @@ function AppSidebar() {
             className="flex-1 space-y-6 p-6 overflow-auto"
           >
             <FieldSet>
-              <FieldLegend>Datos del usuario</FieldLegend>
-              <FieldGroup className="flex flex-col gap-4">
+              <FieldGroup className="space-y-2">
                 <Field>
                   <FieldLabel htmlFor="email">Email</FieldLabel>
                   <Input
@@ -603,7 +630,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
-      <Toaster />
+      <Toaster position="top-center" richColors />
     </BrowserRouter>
   );
 }
@@ -637,12 +664,7 @@ function Login() {
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FieldSet>
-            <FieldLegend>Datos de acceso</FieldLegend>
-            <FieldDescription>
-              Ingresá tu correo y contraseña para acceder al panel.
-            </FieldDescription>
-
-            <FieldGroup className="flex flex-col gap-4">
+            <FieldGroup className="space-y-2">
               {/* Email */}
               <Field>
                 <FieldLabel>Email</FieldLabel>
@@ -675,11 +697,15 @@ function Login() {
           </FieldSet>
 
           <Button type="submit" className="w-full">
-            Entrar
+            <LogInIcon />
+            Iniciar sesión
           </Button>
 
-          <Button asChild variant="ghost" className="w-full">
-            <Link to="/reset-request">Olvidé mi contraseña</Link>
+          <Button asChild variant="outline" className="w-full">
+            <Link to="/reset-request">
+              <KeyRoundIcon />
+              Olvidé mi contraseña
+            </Link>
           </Button>
         </form>
       </div>
@@ -704,11 +730,12 @@ function ResetRequest() {
   const onSubmit = async (values) => {
     await toast.promise(axios.post("/auth/request-reset", values), {
       loading: "Enviando correo…",
-      success: "Se generó un token (ver consola del servidor)",
+      success: () => {
+        navigate("/reset", { replace: true });
+        return "Se generó un token (ver consola del servidor)";
+      },
       error: "Error al enviar correo",
     });
-
-    navigate("/reset", { replace: true });
   };
 
   return (
@@ -720,12 +747,7 @@ function ResetRequest() {
 
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <FieldSet>
-            <FieldLegend>Restablecer contraseña</FieldLegend>
-            <FieldDescription>
-              Ingresá tu email para generar un enlace de recuperación.
-            </FieldDescription>
-
-            <FieldGroup className="flex flex-col gap-4">
+            <FieldGroup className="space-y-2">
               <Field>
                 <FieldLabel>Email</FieldLabel>
                 <Input
@@ -742,11 +764,15 @@ function ResetRequest() {
           </FieldSet>
 
           <Button type="submit" className="w-full">
+            <SendIcon />
             Enviar enlace
           </Button>
 
-          <Button asChild variant="ghost" className="w-full">
-            <Link to="/login">Volver al inicio de sesión</Link>
+          <Button asChild variant="outline" className="w-full">
+            <Link to="/login">
+              <ArrowLeftIcon />
+              Volver al inicio de sesión
+            </Link>
           </Button>
         </form>
       </div>
@@ -803,11 +829,15 @@ function ResetPassword() {
             </FieldError>
           </Field>
           <Button type="submit" className="w-full">
+            <RotateCcwIcon />
             Restablecer
           </Button>
 
-          <Button asChild variant="ghost" className="w-full">
-            <Link to="/login">Volver al inicio de sesión</Link>
+          <Button asChild variant="outline" className="w-full">
+            <Link to="/login">
+              <ArrowLeftIcon />
+              Volver al inicio de sesión
+            </Link>
           </Button>
         </form>
       </div>
@@ -1074,8 +1104,7 @@ function Cuts() {
             className="flex-1 space-y-6 p-6 overflow-auto"
           >
             <FieldSet>
-              <FieldLegend>Datos del corte</FieldLegend>
-              <div className="flex flex-col gap-4">
+              <FieldGroup className="space-y-2">
                 {/* Cliente */}
                 <Field data-invalid={!!addForm.formState.errors.clientId}>
                   <FieldLabel>Cliente</FieldLabel>
@@ -1133,7 +1162,7 @@ function Cuts() {
                   />
                 </Field>
 
-                {/* Fotos */}
+                {/* Fotos nuevas (addForm) */}
                 <Field>
                   <FieldLabel>Fotos</FieldLabel>
                   <Input
@@ -1142,28 +1171,33 @@ function Cuts() {
                     multiple
                     onChange={(e) => handlePhotoUpload(e.target.files, addForm)}
                   />
+
                   {addForm.watch("photos")?.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-3">
-                      {addForm.watch("photos").map((photo, i) => (
-                        <div key={i} className="group relative">
-                          <img
-                            src={photo.preview}
-                            alt={`Foto ${i + 1}`}
-                            className="border rounded-md w-20 h-20 object-cover"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => removePhoto(i, addForm)}
-                            className="top-1 right-1 absolute bg-black/60 opacity-0 group-hover:opacity-100 p-1 rounded-full text-white transition"
-                          >
-                            <XIcon className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
+                    <PhotoProvider>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {addForm.watch("photos").map((photo, i) => (
+                          <div key={i} className="group relative">
+                            <PhotoView src={photo.preview}>
+                              <img
+                                src={photo.preview}
+                                alt={`Foto ${i + 1}`}
+                                className="border rounded-md w-20 h-20 object-cover cursor-pointer"
+                              />
+                            </PhotoView>
+                            <button
+                              type="button"
+                              onClick={() => removePhoto(i, addForm)}
+                              className="top-1 right-1 absolute bg-black/60 p-1 rounded-full text-white"
+                            >
+                              <XIcon className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </PhotoProvider>
                   )}
                 </Field>
-              </div>
+              </FieldGroup>
             </FieldSet>
           </form>
           <DrawerFooter>
@@ -1184,6 +1218,9 @@ function Cuts() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Editar corte</DrawerTitle>
+            <DrawerDescription>
+              Modificá los datos o fotos de este corte existente.
+            </DrawerDescription>
           </DrawerHeader>
 
           <form
@@ -1222,32 +1259,41 @@ function Cuts() {
             {/* Fotos existentes */}
             <FieldLabel>Fotos existentes</FieldLabel>
             {editing?.photos?.length > 0 ? (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {editing.photos.map((p) => (
-                  <div key={p.id} className="group relative">
-                    <img
-                      src={`/api/cuts/${editing.id}/photos/${p.id}/data`}
-                      alt="Foto existente"
-                      className="border rounded-md w-20 h-20 object-cover"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveOldPhoto(p.id)}
-                      className="top-1 right-1 absolute bg-black/60 opacity-0 group-hover:opacity-100 p-1 rounded-full text-white transition"
-                    >
-                      <XIcon className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <PhotoProvider>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {editing.photos.map((p) => {
+                    const photoUrl = `${API}/cuts/${editing.id}/photos/${p.id}/data`;
+                    return (
+                      <div key={p.id} className="group relative">
+                        <PhotoView src={photoUrl}>
+                          <img
+                            src={photoUrl}
+                            alt={`Foto ${p.id}`}
+                            className="border rounded-md w-20 h-20 object-cover cursor-pointer"
+                            onError={(e) =>
+                              (e.currentTarget.style.display = "none")
+                            }
+                          />
+                        </PhotoView>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveOldPhoto(p.id)}
+                          className="top-1 right-1 absolute bg-black/60 p-1 rounded-full text-white"
+                        >
+                          <XIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </PhotoProvider>
             ) : (
               <p className="text-muted-foreground text-sm">
                 Sin fotos guardadas
               </p>
             )}
 
-            {/* Fotos nuevas */}
+            {/* Fotos nuevas (editForm) */}
             <FieldLabel>Añadir fotos nuevas</FieldLabel>
             <Input
               type="file"
@@ -1255,25 +1301,30 @@ function Cuts() {
               multiple
               onChange={(e) => handlePhotoUpload(e.target.files, editForm)}
             />
+
             {editForm.watch("photos")?.length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3">
-                {editForm.watch("photos").map((photo, i) => (
-                  <div key={i} className="group relative">
-                    <img
-                      src={photo.preview}
-                      alt={`Nueva ${i + 1}`}
-                      className="border rounded-md w-20 h-20 object-cover"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removePhoto(i, editForm)}
-                      className="top-1 right-1 absolute bg-black/60 opacity-0 group-hover:opacity-100 p-1 rounded-full text-white transition"
-                    >
-                      <XIcon className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <PhotoProvider>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {editForm.watch("photos").map((photo, i) => (
+                    <div key={i} className="group relative">
+                      <PhotoView src={photo.preview}>
+                        <img
+                          src={photo.preview}
+                          alt={`Nueva ${i + 1}`}
+                          className="border rounded-md w-20 h-20 object-cover cursor-pointer"
+                        />
+                      </PhotoView>
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(i, editForm)}
+                        className="top-1 right-1 absolute bg-black/60 p-1 rounded-full text-white"
+                      >
+                        <XIcon className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </PhotoProvider>
             )}
           </form>
 
@@ -1321,10 +1372,8 @@ function CutDetail() {
           await toast.promise(
             (async () => {
               await axios.delete(`/cuts/${data.id}/photos/${pid}`);
-
               const res = await axios.get("/cuts");
               const refreshed = res.data;
-
               setData(refreshed.find((x) => x.id === data.id));
             })(),
             {
@@ -1400,31 +1449,34 @@ function CutDetail() {
         </div>
 
         {data.photos?.length ? (
-          <div className="gap-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
-            {data.photos.map((p) => (
-              <div key={p.id} className="group relative">
-                <img
-                  src={`${API}/cuts/${data.id}/photos/${p.id}/data`}
-                  className="group-hover:opacity-90 border rounded-md w-full object-cover aspect-square transition cursor-pointer"
-                  onClick={() =>
-                    window.open(
-                      `${API}/cuts/${data.id}/photos/${p.id}/data`,
-                      "_blank"
-                    )
-                  }
-                />
-                <Button
-                  size="icon"
-                  variant="destructive"
-                  className="top-1 right-1 absolute opacity-90 w-6 h-6"
-                  onClick={() => delPhoto(p.id)}
-                  title="Eliminar"
-                >
-                  <Trash2Icon className="w-3 h-3" />
-                </Button>
-              </div>
-            ))}
-          </div>
+          <PhotoProvider>
+            <div className="gap-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
+              {data.photos.map((p) => {
+                const url = `${API}/cuts/${data.id}/photos/${p.id}/data`;
+                return (
+                  <div key={p.id} className="group relative">
+                    <PhotoView src={url}>
+                      <img
+                        src={url}
+                        className="group-hover:opacity-90 border rounded-md w-full object-cover aspect-square transition cursor-pointer"
+                        alt="Foto del corte"
+                      />
+                    </PhotoView>
+
+                    <Button
+                      size="icon"
+                      variant="destructive"
+                      className="top-1 right-1 absolute opacity-90 w-6 h-6"
+                      onClick={() => delPhoto(p.id)}
+                      title="Eliminar"
+                    >
+                      <Trash2Icon className="w-3 h-3" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </PhotoProvider>
         ) : (
           <p className="text-muted-foreground text-sm italic">Sin fotos</p>
         )}
@@ -1566,6 +1618,9 @@ function Barbers() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Nuevo barbero</DrawerTitle>
+            <DrawerDescription>
+              Cargá los datos básicos del nuevo integrante del equipo.
+            </DrawerDescription>
           </DrawerHeader>
           <form
             id="formAddBarber"
@@ -1601,6 +1656,9 @@ function Barbers() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Editar barbero</DrawerTitle>
+            <DrawerDescription>
+              Modificá la información del barbero seleccionado.
+            </DrawerDescription>
           </DrawerHeader>
           <form
             id="formEditBarber"
@@ -1893,6 +1951,10 @@ function Clients() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Nuevo cliente</DrawerTitle>
+            <DrawerDescription>
+              Ingresá los datos del nuevo cliente para registrarlo en el
+              sistema.
+            </DrawerDescription>
           </DrawerHeader>
           <form
             id="formAddClient"
@@ -1932,6 +1994,9 @@ function Clients() {
         <DrawerContent>
           <DrawerHeader>
             <DrawerTitle>Editar cliente</DrawerTitle>
+            <DrawerDescription>
+              Actualizá la información del cliente seleccionado.
+            </DrawerDescription>
           </DrawerHeader>
           <form
             id="formEditClient"
