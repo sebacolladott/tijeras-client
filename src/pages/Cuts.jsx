@@ -222,7 +222,7 @@ export default function Cuts() {
   };
 
   const handleDeleteCut = (id) => {
-    toast("�Eliminar corte?", {
+    toast("¿Eliminar corte?", {
       action: {
         label: "Eliminar",
         onClick: async () => {

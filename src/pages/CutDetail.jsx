@@ -19,12 +19,10 @@ export default function CutDetail() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await axios.get("/cuts");
-        const all = res.data;
-        const found = all.find((item) => String(item.id) === String(id));
-        setData(found || null);
-      } catch (err) {
-        console.error("Error al cargar los cortes:", err);
+        const res = await axios.get(`/cuts/${id}`);
+        setData(res.data);
+      } catch {
+        toast.error("Error al cargar el corte");
       }
     })();
   }, [id]);
@@ -34,16 +32,17 @@ export default function CutDetail() {
 
   const removePhoto = (photoId) => {
     toast("¿Eliminar foto?", {
-      description: "Esta accion no se puede deshacer.",
+      description: "Esta acción no se puede deshacer.",
       action: {
         label: "Eliminar",
         onClick: async () => {
           await toast.promise(
             (async () => {
               await axios.delete(`/cuts/${data.id}/photos/${photoId}`);
-              const res = await axios.get("/cuts");
-              const refreshed = res.data;
-              setData(refreshed.find((item) => item.id === data.id));
+              setData((prev) => ({
+                ...prev,
+                photos: prev.photos.filter((p) => p.id !== photoId),
+              }));
             })(),
             {
               loading: "Eliminando foto...",
@@ -66,24 +65,29 @@ export default function CutDetail() {
       </div>
 
       <div className="space-y-3 p-5 border rounded-lg">
-        <div className="flex flex-col gap-1">
+        <div>
           <h4 className="font-semibold text-base">
-            {data.client?.id ? (
-              <Link to={`/clients/${data.client.id}`} className="hover:underline">
+            {data.client ? (
+              <Link
+                to={`/clients/${data.client.id}`}
+                className="hover:underline"
+              >
                 {data.client.name}
               </Link>
             ) : (
-              data.client?.name || "Sin cliente"
+              "Sin cliente"
             )}
           </h4>
-
           <p className="text-muted-foreground text-sm">
-            {data.barber?.id ? (
-              <Link to={`/barbers/${data.barber.id}`} className="hover:underline">
+            {data.barber ? (
+              <Link
+                to={`/barbers/${data.barber.id}`}
+                className="hover:underline"
+              >
                 {data.barber.name}
               </Link>
             ) : (
-              data.barber?.name || "-"
+              "-"
             )}
           </p>
         </div>
