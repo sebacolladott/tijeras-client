@@ -37,10 +37,12 @@ import {
 } from "lucide-react";
 import { formatCutDate } from "@/lib/date";
 import { useInfiniteResource } from "@/hooks/useInfiniteResource";
+import { useDebounce } from "@/hooks/useDebounce"; // 👈 nuevo hook
 
 const API = import.meta.env.VITE_API_URL;
 const PAGE_LIMIT = 9;
 
+// ---------- Schemas ----------
 const photoSchema = z.object({
   base64: z.string().min(1),
   mimeType: z.string().min(1),
@@ -54,14 +56,19 @@ const cutSchema = z.object({
   photos: z.array(photoSchema).optional(),
 });
 
+// ---------- Componente principal ----------
 export default function Cuts() {
   const [clients, setClients] = useState([]);
   const [barbers, setBarbers] = useState([]);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounce(query, 500);
+
   const navigate = useNavigate();
 
+  // ---------- Formularios ----------
   const addForm = useForm({
     resolver: zodResolver(cutSchema),
     defaultValues: {
@@ -85,6 +92,7 @@ export default function Cuts() {
     },
   });
 
+  // ---------- Datos iniciales ----------
   useEffect(() => {
     (async () => {
       try {
@@ -101,12 +109,19 @@ export default function Cuts() {
     })();
   }, []);
 
+  // ---------- Fetch cortes (con búsqueda) ----------
   const fetchCuts = useCallback(
     (pageParam, limitParam) =>
       axios
-        .get("/cuts", { params: { page: pageParam, limit: limitParam } })
+        .get("/cuts", {
+          params: {
+            page: pageParam,
+            limit: limitParam,
+            q: debouncedQuery || undefined,
+          },
+        })
         .then((res) => res.data),
-    []
+    [debouncedQuery]
   );
 
   const {
@@ -121,6 +136,11 @@ export default function Cuts() {
     onError: () => toast.error("Error al cargar cortes"),
   });
 
+  useEffect(() => {
+    reset();
+  }, [debouncedQuery]);
+
+  // ---------- Helpers ----------
   const handlePhotoUpload = (files, form) => {
     const fileArray = Array.from(files || []);
     const readers = fileArray.map(
@@ -244,6 +264,7 @@ export default function Cuts() {
 
   const isEmpty = cuts.length === 0;
 
+  // ---------- Render ----------
   return (
     <>
       <div className="flex justify-between items-center">
@@ -258,13 +279,29 @@ export default function Cuts() {
         </div>
       </div>
 
+      {/* 🔍 Buscador */}
+      <div className="flex items-center gap-2 mt-4">
+        <Input
+          placeholder="Buscar cortes por cliente, barbero o estilo..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="max-w-sm"
+        />
+        {query && (
+          <Button variant="ghost" onClick={() => setQuery("")}>
+            Limpiar
+          </Button>
+        )}
+      </div>
+
+      {/* Lista */}
       {isLoading && isEmpty ? (
         <div className="py-10 text-muted-foreground text-center">
           Cargando cortes...
         </div>
       ) : isEmpty ? (
         <div className="py-10 text-muted-foreground text-center">
-          No hay registros todavia.
+          No hay registros todavía.
         </div>
       ) : (
         <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
@@ -326,6 +363,7 @@ export default function Cuts() {
         </div>
       )}
 
+      {/* Drawer añadir */}
       <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DrawerContent>
           <DrawerHeader>
@@ -345,10 +383,10 @@ export default function Cuts() {
                   <FieldLabel>Cliente</FieldLabel>
                   <ComboboxCreate
                     value={addForm.watch("clientId")}
-                    onChange={(value) => addForm.setValue("clientId", value)}
-                    items={clients.map((client) => ({
-                      value: String(client.id),
-                      label: client.name,
+                    onChange={(v) => addForm.setValue("clientId", v)}
+                    items={clients.map((c) => ({
+                      value: String(c.id),
+                      label: c.name,
                     }))}
                     placeholder="Selecciona o crea..."
                     onCreate={handleCreateClient}
@@ -362,10 +400,10 @@ export default function Cuts() {
                   <FieldLabel>Barbero</FieldLabel>
                   <ComboboxCreate
                     value={addForm.watch("barberId")}
-                    onChange={(value) => addForm.setValue("barberId", value)}
-                    items={barbers.map((barber) => ({
-                      value: String(barber.id),
-                      label: barber.name,
+                    onChange={(v) => addForm.setValue("barberId", v)}
+                    items={barbers.map((b) => ({
+                      value: String(b.id),
+                      label: b.name,
                     }))}
                     placeholder="Selecciona o crea..."
                     onCreate={handleCreateBarber}
@@ -400,26 +438,24 @@ export default function Cuts() {
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={(event) =>
-                      handlePhotoUpload(event.target.files, addForm)
-                    }
+                    onChange={(e) => handlePhotoUpload(e.target.files, addForm)}
                   />
 
                   {addForm.watch("photos")?.length > 0 && (
                     <PhotoProvider>
                       <div className="flex flex-wrap gap-2 mt-3">
-                        {addForm.watch("photos").map((photo, index) => (
-                          <div key={index} className="group relative">
+                        {addForm.watch("photos").map((photo, i) => (
+                          <div key={i} className="group relative">
                             <PhotoView src={photo.preview}>
                               <img
                                 src={photo.preview}
-                                alt={`Nueva ${index + 1}`}
+                                alt={`Nueva ${i + 1}`}
                                 className="border rounded-md w-20 h-20 object-cover cursor-pointer"
                               />
                             </PhotoView>
                             <button
                               type="button"
-                              onClick={() => removePhoto(index, addForm)}
+                              onClick={() => removePhoto(i, addForm)}
                               className="top-1 right-1 absolute bg-black/60 p-1 rounded-full text-white"
                             >
                               <XIcon className="w-3 h-3" />
@@ -446,6 +482,7 @@ export default function Cuts() {
         </DrawerContent>
       </Drawer>
 
+      {/* Drawer editar */}
       <Drawer open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DrawerContent>
           <DrawerHeader>
@@ -463,10 +500,10 @@ export default function Cuts() {
             <FieldLabel>Cliente</FieldLabel>
             <ComboboxCreate
               value={editForm.watch("clientId")}
-              onChange={(value) => editForm.setValue("clientId", value)}
-              items={clients.map((client) => ({
-                value: String(client.id),
-                label: client.name,
+              onChange={(v) => editForm.setValue("clientId", v)}
+              items={clients.map((c) => ({
+                value: String(c.id),
+                label: c.name,
               }))}
               onCreate={handleCreateClient}
             />
@@ -474,10 +511,10 @@ export default function Cuts() {
             <FieldLabel>Barbero</FieldLabel>
             <ComboboxCreate
               value={editForm.watch("barberId")}
-              onChange={(value) => editForm.setValue("barberId", value)}
-              items={barbers.map((barber) => ({
-                value: String(barber.id),
-                label: barber.name,
+              onChange={(v) => editForm.setValue("barberId", v)}
+              items={barbers.map((b) => ({
+                value: String(b.id),
+                label: b.name,
               }))}
               onCreate={handleCreateBarber}
             />
@@ -501,9 +538,6 @@ export default function Cuts() {
                             src={photoUrl}
                             alt={`Foto ${photo.id}`}
                             className="border rounded-md w-20 h-20 object-cover cursor-pointer"
-                            onError={(event) => {
-                              event.currentTarget.style.display = "none";
-                            }}
                           />
                         </PhotoView>
                         <button
@@ -529,9 +563,7 @@ export default function Cuts() {
               type="file"
               accept="image/*"
               multiple
-              onChange={(event) =>
-                handlePhotoUpload(event.target.files, editForm)
-              }
+              onChange={(e) => handlePhotoUpload(e.target.files, editForm)}
             />
 
             {editForm.watch("photos")?.length > 0 && (
@@ -559,7 +591,6 @@ export default function Cuts() {
               </PhotoProvider>
             )}
           </form>
-
           <DrawerFooter>
             <Button type="submit" form="formEditCut">
               Guardar
