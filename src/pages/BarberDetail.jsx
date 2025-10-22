@@ -4,7 +4,13 @@ import { toast } from "sonner";
 import axios from "@/lib/axios";
 
 import { Button } from "@/components/ui/button";
-import { ArrowLeftIcon, CameraIcon, EyeIcon, ScissorsIcon, Trash2Icon } from "lucide-react";
+import {
+  ArrowLeftIcon,
+  CameraIcon,
+  EyeIcon,
+  ScissorsIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { formatCutDate } from "@/lib/date";
 
 export default function BarberDetail() {
@@ -16,26 +22,16 @@ export default function BarberDetail() {
   useEffect(() => {
     (async () => {
       try {
-        const [barbersRes, cutsRes] = await Promise.all([
-          axios.get("/barbers"),
-          axios.get("/cuts"),
+        const [barberRes, cutsRes] = await Promise.all([
+          axios.get(`/barbers/${id}`),
+          axios.get(`/cuts?barberId=${id}`),
         ]);
 
-        const barbers = barbersRes.data.data;
-        const allCuts = cutsRes.data.data;
-
-        const foundBarber = barbers.find((item) => String(item.id) === String(id));
-        setBarber(foundBarber || null);
-
-        setCuts(
-          allCuts.filter(
-            (cut) =>
-              String(cut.barberId) === String(id) ||
-              String(cut.barber?.id ?? "") === String(id)
-          )
-        );
+        setBarber(barberRes.data);
+        setCuts(cutsRes.data.data || []);
       } catch (err) {
         console.error("Error cargando datos:", err);
+        toast.error("Error al cargar barbero o cortes");
       }
     })();
   }, [id]);
@@ -45,13 +41,15 @@ export default function BarberDetail() {
 
   const handleDeleteCut = (cutId) => {
     toast("¿Eliminar corte?", {
+      description: "Esta acción no se puede deshacer.",
       action: {
         label: "Eliminar",
         onClick: async () =>
-          await toast.promise(
-            axios.delete(`/cuts/${cutId}`).then(() => {
+          toast.promise(
+            (async () => {
+              await axios.delete(`/cuts/${cutId}`);
               setCuts((prev) => prev.filter((item) => item.id !== cutId));
-            }),
+            })(),
             {
               loading: "Eliminando corte...",
               success: "Corte eliminado",
@@ -71,6 +69,7 @@ export default function BarberDetail() {
         </Button>
       </div>
 
+      {/* Info del barbero */}
       <div className="space-y-2 p-5 border rounded-lg">
         <h3 className="font-semibold text-base">{barber.name}</h3>
         {barber.bio && (
@@ -81,6 +80,7 @@ export default function BarberDetail() {
         </p>
       </div>
 
+      {/* Lista de cortes */}
       <div className="p-4 border rounded-lg">
         <div className="flex items-center gap-2 mb-3">
           <ScissorsIcon className="w-4 h-4 text-muted-foreground" />
@@ -94,11 +94,16 @@ export default function BarberDetail() {
                 key={cut.id}
                 className="hover:bg-muted/50 p-3 border rounded-md text-sm transition"
               >
-                <p className="font-medium">{cut.client?.name || "Sin cliente"}</p>
-                <p className="text-muted-foreground text-xs">{cut.style}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="font-medium">
+                  {cut.client?.name || "Sin cliente"}
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  {cut.style || "Sin estilo"}
+                </p>
+                <p className="mt-1 text-muted-foreground text-xs">
                   {formatCutDate(cut) || "Sin fecha"}
                 </p>
+
                 <div className="flex justify-between mt-2 text-muted-foreground text-xs">
                   <div className="flex items-center gap-1">
                     <CameraIcon className="w-3 h-3" />
@@ -109,15 +114,17 @@ export default function BarberDetail() {
                       size="icon"
                       variant="outline"
                       onClick={() => navigate(`/cuts/${cut.id}`)}
+                      title="Ver detalle"
                     >
-                      <EyeIcon />
+                      <EyeIcon className="w-4 h-4" />
                     </Button>
                     <Button
                       size="icon"
                       variant="outline"
                       onClick={() => handleDeleteCut(cut.id)}
+                      title="Eliminar corte"
                     >
-                      <Trash2Icon className="text-destructive" />
+                      <Trash2Icon className="w-4 h-4 text-destructive" />
                     </Button>
                   </div>
                 </div>
