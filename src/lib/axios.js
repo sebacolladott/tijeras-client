@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // --- Configuración global de Axios ---
-axios.defaults.baseURL = "https://vps-5402059-x.dattaweb.com/api";
+axios.defaults.baseURL = import.meta.env.VITE_API_URL;
 axios.defaults.withCredentials = true; // 🔥 clave: envía cookies automáticamente
 
 // Interceptor de respuesta para manejar expiración de sesión

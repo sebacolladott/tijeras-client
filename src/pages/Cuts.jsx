@@ -1,0 +1,575 @@
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { toast } from "sonner";
+import axios from "@/lib/axios";
+
+import ComboboxCreate from "@/components/ComboboxCreate";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+} from "@/components/ui/field";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import { PhotoProvider, PhotoView } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
+import {
+  CameraIcon,
+  EyeIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+  XIcon,
+} from "lucide-react";
+import { formatCutDate } from "@/lib/date";
+import { useInfiniteResource } from "@/hooks/useInfiniteResource";
+
+const API = import.meta.env.VITE_API_URL;
+const PAGE_LIMIT = 9;
+
+const photoSchema = z.object({
+  base64: z.string().min(1),
+  mimeType: z.string().min(1),
+});
+
+const cutSchema = z.object({
+  clientId: z.string().min(1, "Elegí un cliente"),
+  barberId: z.string().min(1, "Elegí un barbero"),
+  style: z.string().min(1, "Indicá el estilo"),
+  notes: z.string().optional(),
+  photos: z.array(photoSchema).optional(),
+});
+
+export default function Cuts() {
+  const [clients, setClients] = useState([]);
+  const [barbers, setBarbers] = useState([]);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const navigate = useNavigate();
+
+  const addForm = useForm({
+    resolver: zodResolver(cutSchema),
+    defaultValues: {
+      clientId: "",
+      barberId: "",
+      style: "",
+      notes: "",
+      photos: [],
+    },
+  });
+
+  const editForm = useForm({
+    resolver: zodResolver(cutSchema),
+    defaultValues: {
+      clientId: "",
+      barberId: "",
+      style: "",
+      notes: "",
+      photos: [],
+      keep: [],
+    },
+  });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [clientsRes, barbersRes] = await Promise.all([
+          axios.get("/clients"),
+          axios.get("/barbers"),
+        ]);
+        setClients(clientsRes.data.data);
+        setBarbers(barbersRes.data.data);
+      } catch (error) {
+        console.error("Error al cargar datos iniciales:", error);
+        toast.error("Error al cargar datos iniciales");
+      }
+    })();
+  }, []);
+
+  const fetchCuts = useCallback(
+    (pageParam, limitParam) =>
+      axios
+        .get("/cuts", { params: { page: pageParam, limit: limitParam } })
+        .then((res) => res.data),
+    []
+  );
+
+  const {
+    items: cuts,
+    total: totalCuts,
+    isLoading,
+    hasMore,
+    reset,
+    sentinelRef,
+  } = useInfiniteResource(fetchCuts, {
+    limit: PAGE_LIMIT,
+    onError: () => toast.error("Error al cargar cortes"),
+  });
+
+  const handlePhotoUpload = (files, form) => {
+    const fileArray = Array.from(files || []);
+    const readers = fileArray.map(
+      (file) =>
+        new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) =>
+            resolve({
+              base64: String(event.target.result).split(",")[1],
+              mimeType: file.type,
+              preview: event.target.result,
+            });
+          reader.readAsDataURL(file);
+        })
+    );
+
+    Promise.all(readers).then((photos) => {
+      const current = form.getValues("photos") || [];
+      form.setValue("photos", [...current, ...photos], {
+        shouldValidate: true,
+      });
+    });
+  };
+
+  const removePhoto = (index, form) => {
+    const updated = [...form.getValues("photos")];
+    updated.splice(index, 1);
+    form.setValue("photos", updated, { shouldValidate: true });
+  };
+
+  const handleAddCut = async (data) => {
+    await toast.promise(
+      axios.post("/cuts", data).then(() => reset()),
+      {
+        loading: "Guardando corte...",
+        success: "Corte creado",
+        error: "Error al crear corte",
+      }
+    );
+
+    addForm.reset();
+    setIsAddOpen(false);
+  };
+
+  const openEdit = (cut) => {
+    setEditing(cut);
+    editForm.reset({
+      clientId: cut.clientId,
+      barberId: cut.barberId,
+      style: cut.style,
+      notes: cut.notes,
+      photos: [],
+      keep: cut.photos?.map((photo) => photo.id) || [],
+    });
+    setIsEditOpen(true);
+  };
+
+  const handleRemoveOldPhoto = (photoId) => {
+    const updated = editing.photos.filter((photo) => photo.id !== photoId);
+    setEditing({ ...editing, photos: updated });
+    editForm.setValue(
+      "keep",
+      updated.map((photo) => photo.id)
+    );
+  };
+
+  const handleEditCut = async (data) => {
+    const keep = editForm.getValues("keep") || [];
+
+    await toast.promise(
+      axios
+        .put(`/cuts/${editing.id}`, {
+          ...data,
+          keep,
+        })
+        .then(() => reset()),
+      {
+        loading: "Actualizando corte...",
+        success: "Corte actualizado",
+        error: "Error al actualizar",
+      }
+    );
+
+    setIsEditOpen(false);
+  };
+
+  const handleCreateClient = async (name) => {
+    const res = await axios.post("/clients", { name });
+    const newClient = res.data;
+    setClients((prev) => [...prev, newClient]);
+    return { value: String(newClient.id), label: newClient.name };
+  };
+
+  const handleCreateBarber = async (name) => {
+    const res = await axios.post("/barbers", { name });
+    const newBarber = res.data;
+    setBarbers((prev) => [...prev, newBarber]);
+    return { value: String(newBarber.id), label: newBarber.name };
+  };
+
+  const handleDeleteCut = (id) => {
+    toast("�Eliminar corte?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          await toast.promise(
+            (async () => {
+              await axios.delete(`/cuts/${id}`);
+              await reset();
+            })(),
+            {
+              loading: "Eliminando corte...",
+              success: "Corte eliminado",
+              error: "Error al eliminar corte",
+            }
+          );
+        },
+      },
+    });
+  };
+
+  const isEmpty = cuts.length === 0;
+
+  return (
+    <>
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-lg">Cortes</h3>
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground text-sm">
+            Total: {totalCuts}
+          </span>
+          <Button onClick={() => setIsAddOpen(true)}>
+            <PlusIcon /> Agregar
+          </Button>
+        </div>
+      </div>
+
+      {isLoading && isEmpty ? (
+        <div className="py-10 text-muted-foreground text-center">
+          Cargando cortes...
+        </div>
+      ) : isEmpty ? (
+        <div className="py-10 text-muted-foreground text-center">
+          No hay registros todavia.
+        </div>
+      ) : (
+        <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
+          {cuts.map((cut) => (
+            <div key={cut.id} className="p-4 border rounded-lg">
+              <h4 className="font-medium text-sm">
+                {cut.client?.name || "Sin cliente"}
+              </h4>
+              <p className="text-muted-foreground text-xs">
+                {cut.barber?.name || "-"}
+              </p>
+              <p className="mt-1 text-muted-foreground text-xs">
+                {formatCutDate(cut) || "Sin fecha"}
+              </p>
+              <div className="flex justify-between mt-3 text-muted-foreground text-xs">
+                <span>{cut.style || "Sin estilo"}</span>
+                <div className="flex items-center gap-1">
+                  <CameraIcon className="w-3 h-3" />
+                  <span>{cut.photos?.length || 0}</span>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-3">
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => navigate(`/cuts/${cut.id}`)}
+                >
+                  <EyeIcon />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => openEdit(cut)}
+                >
+                  <PencilIcon />
+                </Button>
+                <Button
+                  size="icon"
+                  variant="outline"
+                  onClick={() => handleDeleteCut(cut.id)}
+                >
+                  <Trash2Icon className="text-destructive" />
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div ref={sentinelRef} className="h-1" />
+      {isLoading && !isEmpty && (
+        <div className="py-4 text-muted-foreground text-sm text-center">
+          Cargando más cortes...
+        </div>
+      )}
+      {!hasMore && !isLoading && !isEmpty && (
+        <div className="py-4 text-muted-foreground text-xs text-center">
+          No hay más resultados.
+        </div>
+      )}
+
+      <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Nuevo corte</DrawerTitle>
+            <DrawerDescription>
+              Completa los datos para registrar un nuevo corte.
+            </DrawerDescription>
+          </DrawerHeader>
+          <form
+            id="formAddCut"
+            onSubmit={addForm.handleSubmit(handleAddCut)}
+            className="flex-1 space-y-6 p-6 overflow-auto"
+          >
+            <FieldSet>
+              <FieldGroup className="space-y-2">
+                <Field data-invalid={!!addForm.formState.errors.clientId}>
+                  <FieldLabel>Cliente</FieldLabel>
+                  <ComboboxCreate
+                    value={addForm.watch("clientId")}
+                    onChange={(value) => addForm.setValue("clientId", value)}
+                    items={clients.map((client) => ({
+                      value: String(client.id),
+                      label: client.name,
+                    }))}
+                    placeholder="Selecciona o crea..."
+                    onCreate={handleCreateClient}
+                  />
+                  <FieldError>
+                    {addForm.formState.errors.clientId?.message}
+                  </FieldError>
+                </Field>
+
+                <Field data-invalid={!!addForm.formState.errors.barberId}>
+                  <FieldLabel>Barbero</FieldLabel>
+                  <ComboboxCreate
+                    value={addForm.watch("barberId")}
+                    onChange={(value) => addForm.setValue("barberId", value)}
+                    items={barbers.map((barber) => ({
+                      value: String(barber.id),
+                      label: barber.name,
+                    }))}
+                    placeholder="Selecciona o crea..."
+                    onCreate={handleCreateBarber}
+                  />
+                  <FieldError>
+                    {addForm.formState.errors.barberId?.message}
+                  </FieldError>
+                </Field>
+
+                <Field data-invalid={!!addForm.formState.errors.style}>
+                  <FieldLabel>Estilo</FieldLabel>
+                  <Input
+                    placeholder="Fade medio, etc."
+                    {...addForm.register("style")}
+                  />
+                  <FieldError>
+                    {addForm.formState.errors.style?.message}
+                  </FieldError>
+                </Field>
+
+                <Field>
+                  <FieldLabel>Notas</FieldLabel>
+                  <Input
+                    placeholder="Observaciones"
+                    {...addForm.register("notes")}
+                  />
+                </Field>
+
+                <Field>
+                  <FieldLabel>Fotos</FieldLabel>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(event) =>
+                      handlePhotoUpload(event.target.files, addForm)
+                    }
+                  />
+
+                  {addForm.watch("photos")?.length > 0 && (
+                    <PhotoProvider>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        {addForm.watch("photos").map((photo, index) => (
+                          <div key={index} className="group relative">
+                            <PhotoView src={photo.preview}>
+                              <img
+                                src={photo.preview}
+                                alt={`Nueva ${index + 1}`}
+                                className="border rounded-md w-20 h-20 object-cover cursor-pointer"
+                              />
+                            </PhotoView>
+                            <button
+                              type="button"
+                              onClick={() => removePhoto(index, addForm)}
+                              className="top-1 right-1 absolute bg-black/60 p-1 rounded-full text-white"
+                            >
+                              <XIcon className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </PhotoProvider>
+                  )}
+                </Field>
+              </FieldGroup>
+            </FieldSet>
+          </form>
+          <DrawerFooter>
+            <Button type="submit" form="formAddCut">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline" onClick={() => addForm.reset()}>
+                Cancelar
+              </Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+
+      <Drawer open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Editar corte</DrawerTitle>
+            <DrawerDescription>
+              Modifica los datos o fotos de este corte existente.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          <form
+            id="formEditCut"
+            onSubmit={editForm.handleSubmit(handleEditCut)}
+            className="flex-1 space-y-6 p-6 overflow-auto"
+          >
+            <FieldLabel>Cliente</FieldLabel>
+            <ComboboxCreate
+              value={editForm.watch("clientId")}
+              onChange={(value) => editForm.setValue("clientId", value)}
+              items={clients.map((client) => ({
+                value: String(client.id),
+                label: client.name,
+              }))}
+              onCreate={handleCreateClient}
+            />
+
+            <FieldLabel>Barbero</FieldLabel>
+            <ComboboxCreate
+              value={editForm.watch("barberId")}
+              onChange={(value) => editForm.setValue("barberId", value)}
+              items={barbers.map((barber) => ({
+                value: String(barber.id),
+                label: barber.name,
+              }))}
+              onCreate={handleCreateBarber}
+            />
+
+            <FieldLabel>Estilo</FieldLabel>
+            <Input {...editForm.register("style")} placeholder="Estilo" />
+
+            <FieldLabel>Notas</FieldLabel>
+            <Input {...editForm.register("notes")} placeholder="Notas" />
+
+            <FieldLabel>Fotos existentes</FieldLabel>
+            {editing?.photos?.length > 0 ? (
+              <PhotoProvider>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {editing.photos.map((photo) => {
+                    const photoUrl = `${API}/cuts/${editing.id}/photos/${photo.id}/data`;
+                    return (
+                      <div key={photo.id} className="group relative">
+                        <PhotoView src={photoUrl}>
+                          <img
+                            src={photoUrl}
+                            alt={`Foto ${photo.id}`}
+                            className="border rounded-md w-20 h-20 object-cover cursor-pointer"
+                            onError={(event) => {
+                              event.currentTarget.style.display = "none";
+                            }}
+                          />
+                        </PhotoView>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveOldPhoto(photo.id)}
+                          className="top-1 right-1 absolute bg-black/60 p-1 rounded-full text-white"
+                        >
+                          <XIcon className="w-3 h-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </PhotoProvider>
+            ) : (
+              <p className="text-muted-foreground text-sm">
+                Sin fotos guardadas
+              </p>
+            )}
+
+            <FieldLabel>Añadir fotos nuevas</FieldLabel>
+            <Input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(event) =>
+                handlePhotoUpload(event.target.files, editForm)
+              }
+            />
+
+            {editForm.watch("photos")?.length > 0 && (
+              <PhotoProvider>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {editForm.watch("photos").map((photo, index) => (
+                    <div key={index} className="group relative">
+                      <PhotoView src={photo.preview}>
+                        <img
+                          src={photo.preview}
+                          alt={`Nueva ${index + 1}`}
+                          className="border rounded-md w-20 h-20 object-cover cursor-pointer"
+                        />
+                      </PhotoView>
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(index, editForm)}
+                        className="top-1 right-1 absolute bg-black/60 p-1 rounded-full text-white"
+                      >
+                        <XIcon className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </PhotoProvider>
+            )}
+          </form>
+
+          <DrawerFooter>
+            <Button type="submit" form="formEditCut">
+              Guardar
+            </Button>
+            <DrawerClose asChild>
+              <Button variant="outline">Cancelar</Button>
+            </DrawerClose>
+          </DrawerFooter>
+        </DrawerContent>
+      </Drawer>
+    </>
+  );
+}

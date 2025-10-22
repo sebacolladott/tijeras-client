@@ -1,0 +1,144 @@
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { toast } from "sonner";
+import axios from "@/lib/axios";
+
+import { Button } from "@/components/ui/button";
+import { ArrowLeftIcon, CameraIcon, EyeIcon, ScissorsIcon, Trash2Icon } from "lucide-react";
+import { formatCutDate } from "@/lib/date";
+
+export default function ClientDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [client, setClient] = useState(null);
+  const [cuts, setCuts] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [clientsRes, cutsRes] = await Promise.all([
+          axios.get("/clients"),
+          axios.get("/cuts"),
+        ]);
+
+        const clients = clientsRes.data.data;
+        const allCuts = cutsRes.data.data;
+
+        const foundClient = clients.find((item) => String(item.id) === String(id));
+        setClient(foundClient || null);
+
+        setCuts(
+          allCuts.filter(
+            (cut) =>
+              String(cut.clientId) === String(id) ||
+              String(cut.client?.id ?? "") === String(id)
+          )
+        );
+      } catch (err) {
+        console.error("Error cargando datos:", err);
+      }
+    })();
+  }, [id]);
+
+  if (!client)
+    return <p className="text-muted-foreground text-sm">Cargando...</p>;
+
+  const handleDeleteCut = (cutId) => {
+    toast("¿Eliminar corte?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () =>
+          toast.promise(
+            axios.delete(`/cuts/${cutId}`).then(() => {
+              setCuts((prev) => prev.filter((item) => item.id !== cutId));
+            }),
+            {
+              loading: "Eliminando corte...",
+              success: "Corte eliminado",
+              error: "Error al eliminar corte",
+            }
+          ),
+      },
+    });
+  };
+
+  return (
+    <section className="space-y-5">
+      <div className="flex justify-between items-center">
+        <Button variant="ghost" onClick={() => navigate(-1)}>
+          <ArrowLeftIcon className="mr-1 w-4 h-4" />
+          Volver
+        </Button>
+      </div>
+
+      <div className="space-y-2 p-5 border rounded-lg">
+        <h3 className="font-semibold text-base">{client.name}</h3>
+        <div className="space-y-1 text-muted-foreground text-sm">
+          {client.phone && (
+            <p>
+              <b>Telefono:</b> {client.phone}
+            </p>
+          )}
+          {client.notes && (
+            <p>
+              <b>Notas:</b> {client.notes}
+            </p>
+          )}
+        </div>
+        <p className="mt-2 text-sm">
+          <b>Cantidad de cortes:</b> {cuts.length}
+        </p>
+      </div>
+
+      <div className="p-4 border rounded-lg">
+        <div className="flex items-center gap-2 mb-3">
+          <ScissorsIcon className="w-4 h-4 text-muted-foreground" />
+          <h4 className="font-medium text-sm">Cortes realizados</h4>
+        </div>
+
+        {cuts.length ? (
+          <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+            {cuts.map((cut) => (
+              <div
+                key={cut.id}
+                className="hover:bg-muted/50 p-3 border rounded-md text-sm transition"
+              >
+                <p className="font-medium">{cut.barber?.name || "Sin barbero"}</p>
+                <p className="text-muted-foreground text-xs">{cut.style}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {formatCutDate(cut) || "Sin fecha"}
+                </p>
+                <div className="flex justify-between mt-2 text-muted-foreground text-xs">
+                  <div className="flex items-center gap-1">
+                    <CameraIcon className="w-3 h-3" />
+                    <span>{cut.photos?.length || 0}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => navigate(`/cuts/${cut.id}`)}
+                    >
+                      <EyeIcon />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleDeleteCut(cut.id)}
+                    >
+                      <Trash2Icon className="text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground text-sm italic">
+            Sin cortes registrados.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
