@@ -34,10 +34,10 @@ import {
   PlusIcon,
   Trash2Icon,
   XIcon,
+  ArrowUpDownIcon,
 } from "lucide-react";
 import { formatCutDate } from "@/lib/date";
-import { useInfiniteResource } from "@/hooks/useInfiniteResource";
-import { useDebounce } from "@/hooks/useDebounce"; // 👈 nuevo hook
+import { useDebounce } from "@/hooks/useDebounce";
 
 const API = import.meta.env.VITE_API_URL;
 const PAGE_LIMIT = 9;
@@ -56,16 +56,21 @@ const cutSchema = z.object({
   photos: z.array(photoSchema).optional(),
 });
 
-// ---------- Componente principal ----------
 export default function Cuts() {
   const [clients, setClients] = useState([]);
   const [barbers, setBarbers] = useState([]);
+  const [cuts, setCuts] = useState([]);
+  const [totalCuts, setTotalCuts] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState("date");
+  const [order, setOrder] = useState("desc");
   const debouncedQuery = useDebounce(query, 500);
-
   const navigate = useNavigate();
 
   // ---------- Formularios ----------
@@ -102,43 +107,38 @@ export default function Cuts() {
         ]);
         setClients(clientsRes.data.data);
         setBarbers(barbersRes.data.data);
-      } catch (error) {
-        console.error("Error al cargar datos iniciales:", error);
+      } catch {
         toast.error("Error al cargar datos iniciales");
       }
     })();
   }, []);
 
-  // ---------- Fetch cortes (con búsqueda) ----------
-  const fetchCuts = useCallback(
-    (pageParam, limitParam) =>
-      axios
-        .get("/cuts", {
-          params: {
-            page: pageParam,
-            limit: limitParam,
-            q: debouncedQuery || undefined,
-          },
-        })
-        .then((res) => res.data),
-    [debouncedQuery]
-  );
-
-  const {
-    items: cuts,
-    total: totalCuts,
-    isLoading,
-    hasMore,
-    reset,
-    sentinelRef,
-  } = useInfiniteResource(fetchCuts, {
-    limit: PAGE_LIMIT,
-    onError: () => toast.error("Error al cargar cortes"),
-  });
+  // ---------- Fetch cortes ----------
+  const fetchCuts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get("/cuts", {
+        params: {
+          page,
+          limit: PAGE_LIMIT,
+          q: debouncedQuery || undefined,
+          sortBy,
+          order,
+        },
+      });
+      setCuts(res.data.data);
+      setTotalCuts(res.data.total);
+      setTotalPages(res.data.totalPages);
+    } catch {
+      toast.error("Error al cargar cortes");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedQuery, sortBy, order]);
 
   useEffect(() => {
-    reset();
-  }, [debouncedQuery]);
+    fetchCuts();
+  }, [fetchCuts]);
 
   // ---------- Helpers ----------
   const handlePhotoUpload = (files, form) => {
@@ -171,18 +171,16 @@ export default function Cuts() {
     form.setValue("photos", updated, { shouldValidate: true });
   };
 
+  // ---------- CRUD ----------
   const handleAddCut = async (data) => {
-    await toast.promise(
-      axios.post("/cuts", data).then(() => reset()),
-      {
-        loading: "Guardando corte...",
-        success: "Corte creado",
-        error: "Error al crear corte",
-      }
-    );
-
+    await toast.promise(axios.post("/cuts", data), {
+      loading: "Guardando corte...",
+      success: "Corte creado",
+      error: "Error al crear corte",
+    });
     addForm.reset();
     setIsAddOpen(false);
+    fetchCuts();
   };
 
   const openEdit = (cut) => {
@@ -210,21 +208,29 @@ export default function Cuts() {
   const handleEditCut = async (data) => {
     const keep = editForm.getValues("keep") || [];
 
-    await toast.promise(
-      axios
-        .put(`/cuts/${editing.id}`, {
-          ...data,
-          keep,
-        })
-        .then(() => reset()),
-      {
-        loading: "Actualizando corte...",
-        success: "Corte actualizado",
-        error: "Error al actualizar",
-      }
-    );
-
+    await toast.promise(axios.put(`/cuts/${editing.id}`, { ...data, keep }), {
+      loading: "Actualizando corte...",
+      success: "Corte actualizado",
+      error: "Error al actualizar",
+    });
     setIsEditOpen(false);
+    fetchCuts();
+  };
+
+  const handleDeleteCut = (id) => {
+    toast("¿Eliminar corte?", {
+      action: {
+        label: "Eliminar",
+        onClick: async () => {
+          await toast.promise(axios.delete(`/cuts/${id}`), {
+            loading: "Eliminando corte...",
+            success: "Corte eliminado",
+            error: "Error al eliminar",
+          });
+          fetchCuts();
+        },
+      },
+    });
   };
 
   const handleCreateClient = async (name) => {
@@ -239,27 +245,6 @@ export default function Cuts() {
     const newBarber = res.data;
     setBarbers((prev) => [...prev, newBarber]);
     return { value: String(newBarber.id), label: newBarber.name };
-  };
-
-  const handleDeleteCut = (id) => {
-    toast("¿Eliminar corte?", {
-      action: {
-        label: "Eliminar",
-        onClick: async () => {
-          await toast.promise(
-            (async () => {
-              await axios.delete(`/cuts/${id}`);
-              await reset();
-            })(),
-            {
-              loading: "Eliminando corte...",
-              success: "Corte eliminado",
-              error: "Error al eliminar corte",
-            }
-          );
-        },
-      },
-    });
   };
 
   const isEmpty = cuts.length === 0;
@@ -279,8 +264,8 @@ export default function Cuts() {
         </div>
       </div>
 
-      {/* 🔍 Buscador */}
-      <div className="flex items-center gap-2 mt-4">
+      {/* 🔍 Buscador + Orden */}
+      <div className="flex flex-wrap items-center gap-3 mt-4">
         <Input
           placeholder="Buscar cortes por cliente, barbero o estilo..."
           value={query}
@@ -292,78 +277,108 @@ export default function Cuts() {
             Limpiar
           </Button>
         )}
+        <div className="flex items-center gap-2">
+          <ArrowUpDownIcon className="w-4 h-4 text-muted-foreground" />
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="px-2 py-1 border rounded-md text-sm"
+          >
+            <option value="date">Fecha</option>
+            <option value="style">Estilo</option>
+            <option value="createdAt">Creado</option>
+          </select>
+          <select
+            value={order}
+            onChange={(e) => setOrder(e.target.value)}
+            className="px-2 py-1 border rounded-md text-sm"
+          >
+            <option value="desc">Desc</option>
+            <option value="asc">Asc</option>
+          </select>
+        </div>
       </div>
 
       {/* Lista */}
-      {isLoading && isEmpty ? (
-        <div className="py-10 text-muted-foreground text-center">
-          Cargando cortes...
-        </div>
-      ) : isEmpty ? (
-        <div className="py-10 text-muted-foreground text-center">
-          No hay registros todavía.
-        </div>
-      ) : (
-        <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
-          {cuts.map((cut) => (
-            <div key={cut.id} className="p-4 border rounded-lg">
-              <h4 className="font-medium text-sm">
-                {cut.client?.name || "Sin cliente"}
-              </h4>
-              <p className="text-muted-foreground text-xs">
-                {cut.barber?.name || "-"}
-              </p>
-              <p className="mt-1 text-muted-foreground text-xs">
-                {formatCutDate(cut) || "Sin fecha"}
-              </p>
-              <div className="flex justify-between mt-3 text-muted-foreground text-xs">
-                <span>{cut.style || "Sin estilo"}</span>
-                <div className="flex items-center gap-1">
-                  <CameraIcon className="w-3 h-3" />
-                  <span>{cut.photos?.length || 0}</span>
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 mt-3">
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => navigate(`/cuts/${cut.id}`)}
-                >
-                  <EyeIcon />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => openEdit(cut)}
-                >
-                  <PencilIcon />
-                </Button>
-                <Button
-                  size="icon"
-                  variant="outline"
-                  onClick={() => handleDeleteCut(cut.id)}
-                >
-                  <Trash2Icon className="text-destructive" />
-                </Button>
-              </div>
+      <div className="relative flex-1 overflow-hidden">
+        <div className="w-full h-full overflow-auto">
+          {loading && isEmpty ? (
+            <div className="py-10 text-muted-foreground text-center">
+              Cargando cortes...
             </div>
-          ))}
+          ) : isEmpty ? (
+            <div className="py-10 text-muted-foreground text-center">
+              No hay registros todavía.
+            </div>
+          ) : (
+            <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
+              {cuts.map((cut) => (
+                <div key={cut.id} className="p-4 border rounded-lg">
+                  <h4 className="font-medium text-sm">
+                    {cut.client?.name || "Sin cliente"}
+                  </h4>
+                  <p className="text-muted-foreground text-xs">
+                    {cut.barber?.name || "-"}
+                  </p>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    {formatCutDate(cut) || "Sin fecha"}
+                  </p>
+                  <div className="flex justify-between mt-3 text-muted-foreground text-xs">
+                    <span>{cut.style || "Sin estilo"}</span>
+                    <div className="flex items-center gap-1">
+                      <CameraIcon className="w-3 h-3" />
+                      <span>{cut.photos?.length || 0}</span>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2 mt-3">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => navigate(`/cuts/${cut.id}`)}
+                    >
+                      <EyeIcon />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => openEdit(cut)}
+                    >
+                      <PencilIcon />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      onClick={() => handleDeleteCut(cut.id)}
+                    >
+                      <Trash2Icon className="text-destructive" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ---------- Paginación ---------- */}
+      {!isEmpty && (
+        <div className="flex justify-between items-center mt-6">
+          <Button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
+            Anterior
+          </Button>
+          <span className="text-muted-foreground text-sm">
+            Página {page} de {totalPages}
+          </span>
+          <Button
+            disabled={page === totalPages}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            Siguiente
+          </Button>
         </div>
       )}
 
-      <div ref={sentinelRef} className="h-1" />
-      {isLoading && !isEmpty && (
-        <div className="py-4 text-muted-foreground text-sm text-center">
-          Cargando más cortes...
-        </div>
-      )}
-      {!hasMore && !isLoading && !isEmpty && (
-        <div className="py-4 text-muted-foreground text-xs text-center">
-          No hay más resultados.
-        </div>
-      )}
-
-      {/* Drawer añadir */}
+      {/* Drawer: Añadir */}
       <Drawer open={isAddOpen} onOpenChange={setIsAddOpen}>
         <DrawerContent>
           <DrawerHeader>
@@ -482,7 +497,7 @@ export default function Cuts() {
         </DrawerContent>
       </Drawer>
 
-      {/* Drawer editar */}
+      {/* Drawer: Editar */}
       <Drawer open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DrawerContent>
           <DrawerHeader>
