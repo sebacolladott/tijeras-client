@@ -38,6 +38,15 @@ import {
 } from "lucide-react";
 import { formatCutDate } from "@/lib/date";
 import { useDebounce } from "@/hooks/useDebounce";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const API = import.meta.env.VITE_API_URL;
 const PAGE_LIMIT = 9;
@@ -272,30 +281,38 @@ export default function Cuts() {
           onChange={(e) => setQuery(e.target.value)}
           className="max-w-sm"
         />
+
         {query && (
           <Button variant="ghost" onClick={() => setQuery("")}>
             Limpiar
           </Button>
         )}
+
         <div className="flex items-center gap-2">
           <ArrowUpDownIcon className="w-4 h-4 text-muted-foreground" />
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="px-2 py-1 border rounded-md text-sm"
-          >
-            <option value="date">Fecha</option>
-            <option value="style">Estilo</option>
-            <option value="createdAt">Creado</option>
-          </select>
-          <select
-            value={order}
-            onChange={(e) => setOrder(e.target.value)}
-            className="px-2 py-1 border rounded-md text-sm"
-          >
-            <option value="desc">Desc</option>
-            <option value="asc">Asc</option>
-          </select>
+
+          {/* Sort by */}
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-[130px]">
+              <SelectValue placeholder="Ordenar por" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="date">Fecha</SelectItem>
+              <SelectItem value="style">Estilo</SelectItem>
+              <SelectItem value="createdAt">Creado</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Order */}
+          <Select value={order} onValueChange={setOrder}>
+            <SelectTrigger className="w-[90px]">
+              <SelectValue placeholder="Orden" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Desc</SelectItem>
+              <SelectItem value="asc">Asc</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
