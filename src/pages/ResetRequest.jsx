@@ -32,14 +32,13 @@ export default function ResetRequest() {
 
   const form = useForm({ resolver: zodResolver(schema) });
 
-  const onSubmit = async (values) => {
-    await toast.promise(axios.post("/auth/request-reset", values), {
+  const onSubmit = (values) => {
+    toast.promise(axios.post("/auth/request-reset", values), {
       loading: "Enviando correo...",
       success: () => {
-        navigate("/reset", { replace: true });
-        return "Se genero un token (ver consola del servidor)";
+        return "Revisa tu correo para continuar";
       },
-      error: "Error al enviar correo",
+      error: "No se pudo enviar el correo",
     });
   };
 
