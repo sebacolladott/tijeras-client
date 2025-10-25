@@ -1,12 +1,21 @@
+// ---------- React ----------
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+
+// ---------- Formularios ----------
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
+
+// ---------- Librerías ----------
 import { toast } from "sonner";
 import axios from "@/lib/axios";
 
-import ComboboxCreate from "@/components/ComboboxCreate";
+// ---------- Utils / Hooks ----------
+import { formatCutDate } from "@/lib/date";
+import { useDebounce } from "@/hooks/useDebounce";
+
+// ---------- UI Components ----------
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -25,19 +34,6 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { PhotoProvider, PhotoView } from "react-photo-view";
-import "react-photo-view/dist/react-photo-view.css";
-import {
-  CameraIcon,
-  EyeIcon,
-  PencilIcon,
-  PlusIcon,
-  Trash2Icon,
-  XIcon,
-  ArrowUpDownIcon,
-} from "lucide-react";
-import { formatCutDate } from "@/lib/date";
-import { useDebounce } from "@/hooks/useDebounce";
 import {
   Select,
   SelectContent,
@@ -47,6 +43,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import ComboboxCreate from "@/components/ComboboxCreate";
+
+// ---------- Iconos ----------
+import {
+  CameraIcon,
+  EyeIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+  XIcon,
+  ArrowUpDownIcon,
+} from "lucide-react";
+
+// ---------- Estilos ----------
+import { PhotoProvider, PhotoView } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
 
 const API = import.meta.env.VITE_API_URL;
 const PAGE_LIMIT = 9;
