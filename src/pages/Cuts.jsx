@@ -68,6 +68,7 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   SearchIcon,
+  DeleteIcon,
 } from "lucide-react";
 
 // ---------- Estilos ----------
@@ -322,7 +323,11 @@ export default function Cuts() {
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-lg">Cortes</h3>
         <div className="flex items-center gap-3">
-          <Button onClick={() => setIsAddOpen(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAddOpen(true)}
+          >
             <PlusIcon /> Agregar
           </Button>
         </div>
@@ -340,13 +345,13 @@ export default function Cuts() {
             <SearchIcon />
           </InputGroupAddon>
           <InputGroupAddon align="inline-end">
-            {loading ? "..." : `${totalCuts} results`}
+            {loading ? "..." : `${totalCuts} resultados`}
             {query && (
               <InputGroupButton
                 variant="secondary"
                 onClick={() => setQuery("")}
               >
-                Limpiar
+                <DeleteIcon />
               </InputGroupButton>
             )}
           </InputGroupAddon>
@@ -446,7 +451,7 @@ export default function Cuts() {
             value={String(limit)}
             onValueChange={(v) => setLimit(Number(v))}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px]" size="sm">
               <SelectValue placeholder="Filas por página" />
             </SelectTrigger>
             <SelectContent>
@@ -458,8 +463,8 @@ export default function Cuts() {
           </Select>
 
           <Button
-            size="icon"
             variant="outline"
+            className="p-0 w-8 h-8"
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}
           >
@@ -471,8 +476,8 @@ export default function Cuts() {
           </span>
 
           <Button
-            size="icon"
             variant="outline"
+            className="p-0 w-8 h-8"
             disabled={page === totalPages}
             onClick={() => setPage((p) => p + 1)}
           >
