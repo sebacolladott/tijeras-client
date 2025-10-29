@@ -11,7 +11,7 @@ import { formatCutDate } from "@/lib/date";
 
 const API = import.meta.env.VITE_API_URL;
 
-export default function CutDetail() {
+export default function ScheduleDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [data, setData] = useState(null);

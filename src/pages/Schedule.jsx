@@ -1,3 +1,298 @@
+/**
+ * Página: Cortes
+ * - Lista, búsqueda, orden y paginación de cortes
+ * - Crear, editar, eliminar y manejo de fotos (nuevas y existentes)
+ */
+// ---------- React ----------
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
+
+// ---------- Formularios ----------
+import { useForm } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+
+// ---------- Librerías ----------
+import { toast } from "sonner";
+import axios from "@/lib/axios";
+
+// ---------- Utils / Hooks ----------
+import { formatCutDate } from "@/lib/date";
+import { useDebounce } from "@/hooks/useDebounce";
+
+// ---------- UI Components ----------
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Field,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldSet,
+} from "@/components/ui/field";
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import ComboboxCreate from "@/components/ComboboxCreate";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+  InputGroupText,
+  InputGroupTextarea,
+} from "@/components/ui/input-group";
+
+// ---------- Iconos ----------
+import {
+  CameraIcon,
+  EyeIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+  XIcon,
+  ArrowUpDownIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  SearchIcon,
+  DeleteIcon,
+} from "lucide-react";
+
+// ---------- Estilos ----------
+import { PhotoProvider, PhotoView } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
+
+const API = import.meta.env.VITE_API_URL;
+
+// ---------- Schemas ----------
+const cutSchema = z.object({
+  clientId: z.string().min(1, "Elegí un cliente"),
+  barberId: z.string().min(1, "Elegí un barbero"),
+  style: z.string().min(1, "Indicá el estilo"),
+  notes: z.string().optional(),
+  photos: z.any().optional(), // ⚠️ no validar base64, son File reales
+});
+
+export default function Schedule() {
+  const [clients, setClients] = useState([]);
+  const [barbers, setBarbers] = useState([]);
+  const [cuts, setCuts] = useState([]);
+  const [totalCuts, setTotalCuts] = useState(0);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState("date");
+  const [order, setOrder] = useState("desc");
+  const debouncedQuery = useDebounce(query, 500);
+  const [limit, setLimit] = useState(10);
+
+  const navigate = useNavigate();
+
+  // ---------- Formularios ----------
+  const addForm = useForm({
+    resolver: zodResolver(cutSchema),
+    defaultValues: {
+      clientId: "",
+      barberId: "",
+      style: "",
+      notes: "",
+      photos: [],
+    },
+  });
+
+  const editForm = useForm({
+    resolver: zodResolver(cutSchema),
+    defaultValues: {
+      clientId: "",
+      barberId: "",
+      style: "",
+      notes: "",
+      photos: [],
+      keep: [],
+    },
+  });
+
+  // ---------- Datos derivados (memo) ----------
+  const clientOptions = useMemo(
+    () => clients.map((c) => ({ value: String(c.id), label: c.name })),
+    [clients]
+  );
+  const barberOptions = useMemo(
+    () => barbers.map((b) => ({ value: String(b.id), label: b.name })),
+    [barbers]
+  );
+
+  // ---------- Datos iniciales ----------
+  useEffect(() => {
+    (async () => {
+      try {
+        const [clientsRes, barbersRes] = await Promise.all([
+          axios.get("/clients"),
+          axios.get("/barbers"),
+        ]);
+        setClients(clientsRes.data.data);
+        setBarbers(barbersRes.data.data);
+      } catch {
+        toast.error("Error al cargar datos iniciales");
+      }
+    })();
+  }, []);
+
+  // ---------- Fetch cortes ----------
+  /**
+   * Carga/actualiza la lista de cortes según filtros y paginación.
+   */
+  const fetchCuts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await axios.get("/cuts", {
+        params: {
+          page,
+          limit,
+          q: debouncedQuery || undefined,
+          sortBy,
+          order,
+        },
+      });
+
+      setCuts(res.data.data);
+      setTotalCuts(res.data.total);
+      setTotalPages(res.data.totalPages);
+    } catch {
+      toast.error("Error al cargar cortes");
+    } finally {
+      setLoading(false);
+    }
+  }, [page, debouncedQuery, sortBy, order, limit]);
+
+  useEffect(() => {
+    fetchCuts();
+  }, [fetchCuts]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery, sortBy, order]);
+
+  // ---------- Helpers ----------
+  const handlePhotoUpload = (files, form) => {
+    const fileArray = Array.from(files || []).map((file) => ({
+      file,
+      preview: URL.createObjectURL(file),
+    }));
+    form.setValue("photos", fileArray, { shouldValidate: true });
+  };
+
+  const removePhoto = (index, form) => {
+    const updated = [...form.getValues("photos")];
+    updated.splice(index, 1);
+    form.setValue("photos", updated, { shouldValidate: true });
+  };
+
+  // ---------- CRUD ----------
+  const handleAddCut = async (data) => {
+    const formData = new FormData();
+
+    formData.append("clientId", data.clientId);
+    formData.append("barberId", data.barberId);
+    formData.append("style", data.style);
+    if (data.notes) formData.append("notes", data.notes);
+
+    for (const { file } of data.photos || []) {
+      formData.append("photos", file);
+    }
+
+    await toast.promise(
+      axios.post("/cuts", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      }),
+      {
+        loading: "Guardando corte...",
+        success: "Corte creado",
+        error: "Error al crear corte",
+      }
+    );
+
+    addForm.reset();
+    setIsAddOpen(false);
+    fetchCuts();
+  };
+
+  /** Abre el drawer de edición con los datos del corte. */
+  const openEdit = (cut) => {
+    setEditing(cut);
+    editForm.reset({
+      clientId: cut.clientId,
+      barberId: cut.barberId,
+      style: cut.style,
+      notes: cut.notes,
+      photos: [],
+      keep: cut.photos?.map((photo) => photo.id) || [],
+    });
+    setIsEditOpen(true);
+  };
+
+  /** Quita una foto existente del corte (actualiza `keep`). */
+  const handleRemoveOldPhoto = (photoId) => {
+    const updated = editing.photos.filter((photo) => photo.id !== photoId);
+    setEditing({ ...editing, photos: updated });
+    editForm.setValue(
+      "keep",
+      updated.map((photo) => photo.id)
+    );
+  };
+
+  /** Actualiza un corte existente. */
+  const handleEditCut = async (data) => {
+    const formData = new FormData();
+    formData.append("clientId", data.clientId);
+    formData.append("barberId", data.barberId);
+    formData.append("style", data.style);
+    if (data.notes) formData.append("notes", data.notes);
+
+    // keep = fotos que se conservan
+    const keep = editForm.getValues("keep") || [];
+    for (const id of keep) formData.append("keep", id);
+
+    // nuevas fotos
+    for (const { file } of data.photos || []) {
+      formData.append("photos", file);
+    }
+
+    await toast.promise(
+      axios.put(`/cuts/${editing.id}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      }),
+      {
+        loading: "Actualizando corte...",
+        success: "Corte actualizado",
+        error: "Error al actualizar",
+      }
+    );
+
+    setIsEditOpen(false);
+    fetchCuts();
+  };
+
+  /** Confirmación y eliminación de un corte. */
+  const handleDeleteCut = (id) => {
+    toast("¿Eliminar corte?", {
       action: {
         label: "Eliminar",
         onClick: async () => {
@@ -12,6 +307,7 @@
     });
   };
 
+  /** Crea cliente desde el combobox y devuelve opción formateada. */
   const handleCreateClient = async (name) => {
     const res = await axios.post("/clients", { name });
     const newClient = res.data;
@@ -19,6 +315,7 @@
     return { value: String(newClient.id), label: newClient.name };
   };
 
+  /** Crea barbero desde el combobox y devuelve opción formateada. */
   const handleCreateBarber = async (name) => {
     const res = await axios.post("/barbers", { name });
     const newBarber = res.data;
@@ -32,12 +329,13 @@
   return (
     <>
       <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-lg">Cortes</h3>
+        <h3 className="font-semibold text-lg">Agenda</h3>
         <div className="flex items-center gap-3">
-          <span className="text-muted-foreground text-sm">
-            Total: {totalCuts}
-          </span>
-          <Button onClick={() => setIsAddOpen(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAddOpen(true)}
+          >
             <PlusIcon /> Agregar
           </Button>
         </div>
@@ -45,25 +343,32 @@
 
       {/* 🔍 Buscador + Orden */}
       <div className="flex flex-wrap items-center gap-3 mt-4">
-        <Input
-          placeholder="Buscar cortes por cliente, barbero o estilo..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="max-w-sm"
-        />
-
-        {query && (
-          <Button variant="ghost" onClick={() => setQuery("")}>
-            Limpiar
-          </Button>
-        )}
+        <InputGroup>
+          <InputGroupInput
+            placeholder="Buscar cortes por cliente, barbero o estilo..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+          <InputGroupAddon align="inline-end">
+            {loading ? "..." : `${totalCuts} resultados`}
+            {query && (
+              <InputGroupButton
+                variant="secondary"
+                onClick={() => setQuery("")}
+              >
+                <DeleteIcon />
+              </InputGroupButton>
+            )}
+          </InputGroupAddon>
+        </InputGroup>
 
         <div className="flex items-center gap-2">
-          <ArrowUpDownIcon className="w-4 h-4 text-muted-foreground" />
-
           {/* Sort by */}
           <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[130px]">
+            <SelectTrigger>
               <SelectValue placeholder="Ordenar por" />
             </SelectTrigger>
             <SelectContent>
@@ -75,12 +380,12 @@
 
           {/* Order */}
           <Select value={order} onValueChange={setOrder}>
-            <SelectTrigger className="w-[90px]">
+            <SelectTrigger>
               <SelectValue placeholder="Orden" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="desc">Desc</SelectItem>
-              <SelectItem value="asc">Asc</SelectItem>
+              <SelectItem value="desc">Descendente</SelectItem>
+              <SelectItem value="asc">Ascendente</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -121,7 +426,7 @@
                     <Button
                       size="icon"
                       variant="outline"
-                      onClick={() => navigate(`/cuts/${cut.id}`)}
+                      onClick={() => navigate(`/schedule/${cut.id}`)}
                     >
                       <EyeIcon />
                     </Button>
@@ -154,7 +459,7 @@
             value={String(limit)}
             onValueChange={(v) => setLimit(Number(v))}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-[180px]" size="sm">
               <SelectValue placeholder="Filas por página" />
             </SelectTrigger>
             <SelectContent>
@@ -166,8 +471,8 @@
           </Select>
 
           <Button
-            size="icon"
             variant="outline"
+            className="p-0 w-8 h-8"
             disabled={page === 1}
             onClick={() => setPage((p) => p - 1)}
           >
@@ -179,8 +484,8 @@
           </span>
 
           <Button
-            size="icon"
             variant="outline"
+            className="p-0 w-8 h-8"
             disabled={page === totalPages}
             onClick={() => setPage((p) => p + 1)}
           >
@@ -210,10 +515,7 @@
                   <ComboboxCreate
                     value={addForm.watch("clientId")}
                     onChange={(v) => addForm.setValue("clientId", v)}
-                    items={clients.map((c) => ({
-                      value: String(c.id),
-                      label: c.name,
-                    }))}
+                    items={clientOptions}
                     placeholder="Selecciona o crea..."
                     onCreate={handleCreateClient}
                   />
@@ -227,10 +529,7 @@
                   <ComboboxCreate
                     value={addForm.watch("barberId")}
                     onChange={(v) => addForm.setValue("barberId", v)}
-                    items={barbers.map((b) => ({
-                      value: String(b.id),
-                      label: b.name,
-                    }))}
+                    items={barberOptions}
                     placeholder="Selecciona o crea..."
                     onCreate={handleCreateBarber}
                   />
@@ -327,10 +626,7 @@
             <ComboboxCreate
               value={editForm.watch("clientId")}
               onChange={(v) => editForm.setValue("clientId", v)}
-              items={clients.map((c) => ({
-                value: String(c.id),
-                label: c.name,
-              }))}
+              items={clientOptions}
               onCreate={handleCreateClient}
             />
 
@@ -338,10 +634,7 @@
             <ComboboxCreate
               value={editForm.watch("barberId")}
               onChange={(v) => editForm.setValue("barberId", v)}
-              items={barbers.map((b) => ({
-                value: String(b.id),
-                label: b.name,
-              }))}
+              items={barberOptions}
               onCreate={handleCreateBarber}
             />
 

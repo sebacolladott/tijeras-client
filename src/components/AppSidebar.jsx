@@ -252,10 +252,10 @@ function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/cuts")}>
-                    <Link to="/cuts">
+                  <SidebarMenuButton asChild isActive={isActive("/schedule")}>
+                    <Link to="/schedule">
                       <SquareScissorsIcon />
-                      Cortes
+                      Agenda
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
