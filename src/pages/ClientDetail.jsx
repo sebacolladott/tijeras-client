@@ -110,7 +110,7 @@ export default function ClientDetail() {
                   {cut.style || "Sin estilo"}
                 </p>
                 <p className="mt-1 text-muted-foreground text-xs">
-                  {formatCutDate(cut) || "Sin fecha"}
+                  {formatCutDate(cut, { dateStyle: "medium", timeStyle: "short" }) || "Sin fecha"}
                 </p>
 
                 <div className="flex justify-between mt-2 text-muted-foreground text-xs">

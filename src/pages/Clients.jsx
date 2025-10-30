@@ -1,14 +1,28 @@
-import { useEffect, useState } from "react";
+﻿import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import axios from "@/lib/axios";
+import { useDebounce } from "@/hooks/useDebounce";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Drawer,
   DrawerClose,
@@ -18,15 +32,22 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer";
-import { EyeIcon, PencilIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import {
+  EyeIcon,
+  PencilIcon,
+  PlusIcon,
+  Trash2Icon,
+  SearchIcon,
+  DeleteIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+} from "lucide-react";
 
 const clientSchema = z.object({
   name: z.string().min(1, "Requerido"),
   phone: z.string().optional(),
   notes: z.string().optional(),
 });
-
-const PAGE_LIMIT = 9;
 
 export default function Clients() {
   const navigate = useNavigate();
@@ -38,6 +59,11 @@ export default function Clients() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounce(query, 500);
+  const [limit, setLimit] = useState(10);
+  const [sortBy, setSortBy] = useState("name");
+  const [order, setOrder] = useState("asc");
 
   const formAdd = useForm({
     resolver: zodResolver(clientSchema),
@@ -50,11 +76,17 @@ export default function Clients() {
   });
 
   // ---------- Cargar clientes ----------
-  const fetchClients = async (pageParam = 1) => {
+  const fetchClients = useCallback(async () => {
     try {
       setLoading(true);
       const res = await axios.get("/clients", {
-        params: { page: pageParam, limit: PAGE_LIMIT },
+        params: {
+          page,
+          limit,
+          q: debouncedQuery || undefined,
+          sortBy,
+          order,
+        },
       });
       setClients(res.data.data);
       setTotalClients(res.data.total);
@@ -64,11 +96,15 @@ export default function Clients() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, limit, debouncedQuery, sortBy, order]);
 
   useEffect(() => {
-    fetchClients(page);
-  }, [page]);
+    fetchClients();
+  }, [fetchClients]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedQuery, sortBy, order]);
 
   // ---------- CRUD ----------
   const onSubmitAdd = async (data) => {
@@ -79,7 +115,7 @@ export default function Clients() {
     });
     formAdd.reset();
     setIsAddOpen(false);
-    fetchClients(page);
+    fetchClients();
   };
 
   const onSubmitEdit = async (data) => {
@@ -89,7 +125,7 @@ export default function Clients() {
       error: "Error al actualizar",
     });
     setIsEditOpen(false);
-    fetchClients(page);
+    fetchClients();
   };
 
   const openEdit = (client) => {
@@ -108,7 +144,7 @@ export default function Clients() {
             success: "Cliente eliminado",
             error: "Error al eliminar",
           });
-          fetchClients(page);
+          fetchClients();
         },
       },
     });
@@ -122,12 +158,59 @@ export default function Clients() {
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-lg">Clientes</h3>
         <div className="flex items-center gap-3">
-          <span className="text-muted-foreground text-sm">
-            Total: {totalClients}
-          </span>
-          <Button onClick={() => setIsAddOpen(true)}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsAddOpen(true)}
+          >
             <PlusIcon /> Agregar
           </Button>
+        </div>
+      </div>
+
+      {/* Buscador */}
+      <div className="flex flex-wrap items-center gap-3 mt-4">
+        <InputGroup>
+          <InputGroupInput
+            placeholder="Buscar clientes por nombre, telefono o notas..."
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <InputGroupAddon>
+            <SearchIcon />
+          </InputGroupAddon>
+          <InputGroupAddon align="inline-end">
+            {loading ? "..." : `${totalClients} resultados`}
+            {query && (
+              <InputGroupButton
+                variant="secondary"
+                onClick={() => setQuery("")}
+              >
+                <DeleteIcon />
+              </InputGroupButton>
+            )}
+          </InputGroupAddon>
+        </InputGroup>
+        <div className="flex items-center gap-2">
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger>
+              <SelectValue placeholder="Ordenar por" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="name">Nombre</SelectItem>
+              <SelectItem value="createdAt">Creado</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={order} onValueChange={setOrder}>
+            <SelectTrigger>
+              <SelectValue placeholder="Orden" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="desc">Descendente</SelectItem>
+              <SelectItem value="asc">Ascendente</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -140,7 +223,7 @@ export default function Clients() {
               </div>
             ) : isEmpty ? (
               <div className="py-10 text-muted-foreground text-center">
-                No hay registros todavía.
+                No hay registros todavia.
               </div>
             ) : (
               <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
@@ -183,18 +266,42 @@ export default function Clients() {
 
       {/* ---------- Paginación ---------- */}
       {!isEmpty && (
-        <div className="flex justify-between items-center mt-6">
-          <Button disabled={page === 1} onClick={() => setPage((p) => p - 1)}>
-            Anterior
+        <div className="flex justify-end items-center gap-3 mt-6">
+          <Select
+            value={String(limit)}
+            onValueChange={(v) => setLimit(Number(v))}
+          >
+            <SelectTrigger className="w-[180px]" size="sm">
+              <SelectValue placeholder="Filas por página" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="5">5 por página</SelectItem>
+              <SelectItem value="10">10 por página</SelectItem>
+              <SelectItem value="20">20 por página</SelectItem>
+              <SelectItem value="50">50 por página</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Button
+            variant="outline"
+            className="p-0 w-8 h-8"
+            disabled={page === 1}
+            onClick={() => setPage((p) => p - 1)}
+          >
+            <ArrowLeftIcon />
           </Button>
+
           <span className="text-muted-foreground text-sm">
             Página {page} de {totalPages}
           </span>
+
           <Button
+            variant="outline"
+            className="p-0 w-8 h-8"
             disabled={page === totalPages}
             onClick={() => setPage((p) => p + 1)}
           >
-            Siguiente
+            <ArrowRightIcon />
           </Button>
         </div>
       )}
@@ -220,7 +327,7 @@ export default function Clients() {
               <FieldError>{formAdd.formState.errors.name?.message}</FieldError>
             </Field>
             <Field>
-              <FieldLabel>Teléfono</FieldLabel>
+              <FieldLabel>Telefono</FieldLabel>
               <Input {...formAdd.register("phone")} placeholder="+54 9 ..." />
             </Field>
             <Field>
@@ -250,7 +357,7 @@ export default function Clients() {
           <DrawerHeader>
             <DrawerTitle>Editar cliente</DrawerTitle>
             <DrawerDescription>
-              Actualiza la información del cliente seleccionado.
+              Actualiza la informacion del cliente seleccionado.
             </DrawerDescription>
           </DrawerHeader>
           <form
@@ -264,7 +371,7 @@ export default function Clients() {
               <FieldError>{formEdit.formState.errors.name?.message}</FieldError>
             </Field>
             <Field>
-              <FieldLabel>Teléfono</FieldLabel>
+              <FieldLabel>Telefono</FieldLabel>
               <Input {...formEdit.register("phone")} placeholder="+54 9 ..." />
             </Field>
             <Field>

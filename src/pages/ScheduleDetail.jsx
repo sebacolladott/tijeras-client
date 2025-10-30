@@ -103,7 +103,7 @@ export default function ScheduleDetail() {
         </div>
 
         <p className="text-muted-foreground text-sm">
-          <b>Fecha:</b> {formatCutDate(data) || "Sin fecha"}
+          <b>Fecha y hora:</b> {formatCutDate(data, { dateStyle: "medium", timeStyle: "short" }) || "Sin fecha"}
         </p>
 
         {data.notes && (
