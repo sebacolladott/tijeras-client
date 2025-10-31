@@ -11,8 +11,30 @@ import Schedule from "./pages/Schedule";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import ResetRequest from "./pages/ResetRequest";
+import { toast } from "sonner";
+import { useEffect } from "react";
 
 function App() {
+  useEffect(() => {
+    const handleError = (event) => {
+      toast.error(`Error: ${event.message}`);
+      console.error(event.error);
+    };
+
+    const handleRejection = (event) => {
+      toast.error(`Error: ${event.reason?.message || event.reason}`);
+      console.error(event.reason);
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, []);
+
   return (
     <BrowserRouter>
       <Routes>
