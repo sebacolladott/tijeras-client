@@ -219,9 +219,9 @@ export default function Schedule() {
     }
 
     await toast.promise(
-      axios.post("/cuts", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      }),
+      // Nota: no establecer manualmente Content-Type para FormData.
+      // El navegador asigna el boundary correcto; en Safari puede fallar si se fuerza.
+      axios.post("/cuts", formData),
       {
         loading: "Guardando corte...",
         success: "Corte creado",
@@ -276,9 +276,8 @@ export default function Schedule() {
     }
 
     await toast.promise(
-      axios.put(`/cuts/${editing.id}`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      }),
+      // Dejar que el navegador defina Content-Type con boundary para FormData
+      axios.put(`/cuts/${editing.id}`, formData),
       {
         loading: "Actualizando corte...",
         success: "Corte actualizado",
