@@ -192,17 +192,39 @@ export default function Schedule() {
 
   // ---------- Helpers ----------
   const handlePhotoUpload = (files, form) => {
-    const fileArray = Array.from(files || []).map((file) => ({
+    const incoming = Array.from(files || []);
+    if (incoming.length === 0) return;
+
+    const current = form.getValues("photos") || [];
+
+    const newOnes = incoming.map((file) => ({
       file,
       preview: URL.createObjectURL(file),
+      _k: `${file.name}-${file.size}-${file.lastModified}`,
     }));
-    form.setValue("photos", fileArray, { shouldValidate: true });
+
+    // Merge y dedup por name/size/lastModified para evitar duplicados al seleccionar varias veces
+    const merged = [...current, ...newOnes];
+    const seen = new Set();
+    const deduped = [];
+    for (const p of merged) {
+      const key = p._k || `${p.file?.name}-${p.file?.size}-${p.file?.lastModified}`;
+      if (key && !seen.has(key)) {
+        seen.add(key);
+        deduped.push(p);
+      }
+    }
+
+    form.setValue("photos", deduped, { shouldValidate: true, shouldDirty: true });
   };
 
   const removePhoto = (index, form) => {
-    const updated = [...form.getValues("photos")];
-    updated.splice(index, 1);
-    form.setValue("photos", updated, { shouldValidate: true });
+    const updated = [...(form.getValues("photos") || [])];
+    const [removed] = updated.splice(index, 1);
+    if (removed?.preview) {
+      try { URL.revokeObjectURL(removed.preview); } catch {}
+    }
+    form.setValue("photos", updated, { shouldValidate: true, shouldDirty: true });
   };
 
   // ---------- CRUD ----------
@@ -562,7 +584,11 @@ export default function Schedule() {
                     type="file"
                     accept="image/*"
                     multiple
-                    onChange={(e) => handlePhotoUpload(e.target.files, addForm)}
+                    onChange={(e) => {
+                      handlePhotoUpload(e.target.files, addForm);
+                      // Permite volver a seleccionar los mismos archivos
+                      e.target.value = null;
+                    }}
                   />
 
                   {addForm.watch("photos")?.length > 0 && (
@@ -681,7 +707,10 @@ export default function Schedule() {
               type="file"
               accept="image/*"
               multiple
-              onChange={(e) => handlePhotoUpload(e.target.files, editForm)}
+              onChange={(e) => {
+                handlePhotoUpload(e.target.files, editForm);
+                e.target.value = null;
+              }}
             />
 
             {editForm.watch("photos")?.length > 0 && (
