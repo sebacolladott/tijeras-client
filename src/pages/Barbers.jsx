@@ -233,7 +233,7 @@ export default function Barbers() {
                   <div key={barber.id} className="p-4 border rounded-lg">
                     <h4 className="font-medium text-sm">{barber.name}</h4>
                     <p className="text-muted-foreground text-xs">
-                      {barber.bio || "Sin bio"}
+                      {barber.bio || "Sin biografía"}
                     </p>
                     <div className="flex justify-end gap-2 mt-3">
                       <Button

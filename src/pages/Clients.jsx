@@ -110,12 +110,14 @@ export default function Clients() {
   const onSubmitAdd = async (data) => {
     await toast.promise(axios.post("/clients", data), {
       loading: "Guardando cliente...",
-      success: "Cliente creado",
+      success: () => {
+        fetchClients();
+        return "Cliente creado";
+      },
       error: "Error al crear cliente",
     });
     formAdd.reset();
     setIsAddOpen(false);
-    fetchClients();
   };
 
   const onSubmitEdit = async (data) => {

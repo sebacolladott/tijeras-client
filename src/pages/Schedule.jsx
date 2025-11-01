@@ -191,7 +191,7 @@ export default function Schedule() {
   }, [debouncedQuery, sortBy, order]);
 
   // ---------- Helpers ----------
-  const handlePhotoUpload = (files, form) => {
+  const handleSinglePhotoUpload = (files, form) => {
     const incoming = Array.from(files || []);
     if (incoming.length === 0) return;
 
@@ -203,28 +203,39 @@ export default function Schedule() {
       _k: `${file.name}-${file.size}-${file.lastModified}`,
     }));
 
-    // Merge y dedup por name/size/lastModified para evitar duplicados al seleccionar varias veces
+    // Agrega al final, sin borrar las anteriores
     const merged = [...current, ...newOnes];
+
+    // Elimina duplicadas por nombre/size/lastModified
     const seen = new Set();
     const deduped = [];
     for (const p of merged) {
-      const key = p._k || `${p.file?.name}-${p.file?.size}-${p.file?.lastModified}`;
+      const key =
+        p._k || `${p.file?.name}-${p.file?.size}-${p.file?.lastModified}`;
       if (key && !seen.has(key)) {
         seen.add(key);
         deduped.push(p);
       }
     }
 
-    form.setValue("photos", deduped, { shouldValidate: true, shouldDirty: true });
+    form.setValue("photos", deduped, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
   };
 
   const removePhoto = (index, form) => {
     const updated = [...(form.getValues("photos") || [])];
     const [removed] = updated.splice(index, 1);
     if (removed?.preview) {
-      try { URL.revokeObjectURL(removed.preview); } catch {}
+      try {
+        URL.revokeObjectURL(removed.preview);
+      } catch {}
     }
-    form.setValue("photos", updated, { shouldValidate: true, shouldDirty: true });
+    form.setValue("photos", updated, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
   };
 
   // ---------- CRUD ----------
@@ -253,7 +264,7 @@ export default function Schedule() {
 
     addForm.reset();
     setIsAddOpen(false);
-    fetchCuts();
+    await fetchCuts();
   };
 
   /** Abre el drawer de edición con los datos del corte. */
@@ -308,7 +319,7 @@ export default function Schedule() {
     );
 
     setIsEditOpen(false);
-    fetchCuts();
+    await fetchCuts();
   };
 
   /** Confirmación y eliminación de un corte. */
@@ -322,7 +333,7 @@ export default function Schedule() {
             success: "Corte eliminado",
             error: "Error al eliminar",
           });
-          fetchCuts();
+          await fetchCuts();
         },
       },
     });
@@ -434,7 +445,10 @@ export default function Schedule() {
                     {cut.barber?.name || "-"}
                   </p>
                   <p className="mt-1 text-muted-foreground text-xs">
-                    {formatCutDate(cut, { dateStyle: "medium", timeStyle: "short" }) || "Sin fecha"}
+                    {formatCutDate(cut, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }) || "Sin fecha"}
                   </p>
                   <div className="flex justify-between mt-3 text-muted-foreground text-xs">
                     <span>{cut.style || "Sin estilo"}</span>
@@ -580,14 +594,15 @@ export default function Schedule() {
 
                 <Field>
                   <FieldLabel>Fotos</FieldLabel>
+
+                  {/* ⚠️ sin "multiple" para compatibilidad con iOS */}
                   <Input
                     type="file"
                     accept="image/*"
-                    multiple
+                    capture={false}
                     onChange={(e) => {
-                      handlePhotoUpload(e.target.files, addForm);
-                      // Permite volver a seleccionar los mismos archivos
-                      e.target.value = null;
+                      handleSinglePhotoUpload(e.target.files, addForm);
+                      e.target.value = null; // permite volver a elegir la misma foto
                     }}
                   />
 
@@ -703,12 +718,14 @@ export default function Schedule() {
             )}
 
             <FieldLabel>Añadir fotos nuevas</FieldLabel>
+
+            {/* ⚠️ Sin "multiple" → permite agregar una por vez, pero mantiene el lote */}
             <Input
               type="file"
               accept="image/*"
-              multiple
+              capture={false}
               onChange={(e) => {
-                handlePhotoUpload(e.target.files, editForm);
+                handleSinglePhotoUpload(e.target.files, editForm);
                 e.target.value = null;
               }}
             />
