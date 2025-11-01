@@ -248,9 +248,17 @@ function AppSidebar() {
 
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Aplicacion</SidebarGroupLabel>
+            <SidebarGroupLabel>Aplicación</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/stats")}>
+                    <Link to="/stats">
+                      <SquareScissorsIcon />
+                      Estadísticas
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/schedule")}>
                     <Link to="/schedule">

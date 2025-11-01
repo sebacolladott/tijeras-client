@@ -11,6 +11,7 @@ import Schedule from "./pages/Schedule";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import ResetRequest from "./pages/ResetRequest";
+import Stats from "./pages/Stats";
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
         {/* Rutas protegidas */}
         <Route element={<ProtectedLayout />}>
           <Route index element={<Navigate to="/schedule" replace />} />
+          <Route path="stats" element={<Stats />} />
           <Route path="schedule" element={<Schedule />} />
           <Route path="schedule/:id" element={<ScheduleDetail />} />
           <Route path="clients" element={<Clients />} />
