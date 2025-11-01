@@ -93,12 +93,12 @@ export default function Barbers() {
       setBarbers(res.data.data);
       setTotalBarbers(res.data.total);
       setTotalPages(res.data.totalPages);
-    } catch (err) {
+    } catch {
       toast.error("Error al cargar barberos");
     } finally {
       setLoading(false);
     }
-  }, [page, limit, debouncedQuery, sortBy, order]);
+  }, [page, debouncedQuery, sortBy, order, limit]);
 
   useEffect(() => {
     fetchBarbers();
