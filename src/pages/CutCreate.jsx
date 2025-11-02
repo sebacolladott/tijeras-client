@@ -59,7 +59,14 @@ async function processImage(file) {
       }
     }
 
-    // ✅ intentar compresión normal
+    // ✅ Forzar que sea siempre un File (Safari necesita esto)
+    if (!(image instanceof File)) {
+      image = new File([image], file.name.replace(/\.[^.]+$/, ".jpg"), {
+        type: "image/jpeg",
+      });
+    }
+
+    // ✅ Compresión normal
     try {
       const compressed = await imageCompression(image, {
         maxSizeMB: 1,
@@ -72,7 +79,7 @@ async function processImage(file) {
         type: "image/webp",
       });
     } catch (err) {
-      // 🔁 fallback si falla el worker
+      // 🔁 Fallback manual
       console.warn("Fallback a compresión básica:", err);
       const img = document.createElement("img");
       img.src = URL.createObjectURL(image);
@@ -141,7 +148,7 @@ export default function CutCreate() {
         }
 
         const processedFile = await processImage(file);
-        formData.append("photos", processedFile);
+        formData.append("photos", processedFile, processedFile.name);
 
         fileSummaries.push(
           `${processedFile.name} (${(processedFile.size / 1024).toFixed(1)} KB)`
