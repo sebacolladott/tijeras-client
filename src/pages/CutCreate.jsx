@@ -76,11 +76,13 @@ export default function CutCreate() {
     if (data.notes) formData.append("notes", data.notes);
 
     const files = fileInputRef.current?.files;
+    const fileSummaries = [];
+
     if (files && files.length > 0) {
       for (const file of files) {
         let imageBlob = file;
 
-        // Si es HEIC/HEIF, convertir primero a JPEG
+        // HEIC → JPEG
         if (
           file.type === "image/heic" ||
           file.type === "image/heif" ||
@@ -94,7 +96,7 @@ export default function CutCreate() {
           }
         }
 
-        // Luego convertir cualquier imagen a WebP
+        // cualquier imagen → WebP
         try {
           const webpBlob = await convertToWebP(imageBlob);
           const webpFile = new File(
@@ -103,17 +105,38 @@ export default function CutCreate() {
             { type: "image/webp" }
           );
           formData.append("photos", webpFile);
+          fileSummaries.push(
+            `${webpFile.name} (${(webpFile.size / 1024).toFixed(1)} KB)`
+          );
         } catch (err) {
           console.error("Error convirtiendo a WebP:", err);
-          formData.append("photos", file); // fallback
+          formData.append("photos", file);
+          fileSummaries.push(`${file.name} (sin conversión)`);
         }
       }
+
+      // Mostrar resumen antes de enviar
+      toast.info(
+        `📸 ${files.length} archivo${files.length > 1 ? "s" : ""} cargado${
+          files.length > 1 ? "s" : ""
+        }:\n${fileSummaries.join("\n")}`
+      );
     }
 
     await toast.promise(axios.post("/cuts", formData), {
       loading: "Creando corte...",
       success: "Corte creado con éxito",
-      error: "Error al crear corte",
+      error: (err) => {
+        if (err.response) {
+          return `Error ${err.response.status}: ${
+            err.response.data.message || JSON.stringify(err.response.data)
+          }`;
+        } else if (err.request) {
+          return "El servidor no respondió";
+        } else {
+          return `Error: ${err.message}`;
+        }
+      },
     });
 
     navigate(`/clients/${id}`);
