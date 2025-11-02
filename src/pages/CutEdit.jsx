@@ -21,24 +21,52 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 
-// ✅ Validación
+// ---------- Validación ----------
 const schema = z.object({
   style: z.string().min(1, "Indicá el estilo"),
   notes: z.string().optional(),
 });
 
-// ✅ Conversión genérica a WebP
+// ---------- Conversión a WebP (con fallback para Safari/iOS) ----------
 async function convertToWebP(blob) {
-  const bitmap = await createImageBitmap(blob);
-  const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(bitmap, 0, 0);
-  return new Promise((resolve) =>
-    canvas.toBlob((b) => resolve(b), "image/webp", 0.9)
-  );
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0);
+    return new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/webp", 0.9)
+    );
+  } catch {
+    // fallback si createImageBitmap no está disponible
+    const img = document.createElement("img");
+    const url = URL.createObjectURL(blob);
+    await new Promise((r) => {
+      img.onload = r;
+      img.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    return new Promise((resolve) =>
+      canvas.toBlob(
+        (b) => {
+          URL.revokeObjectURL(url);
+          resolve(b);
+        },
+        "image/webp",
+        0.9
+      )
+    );
+  }
 }
+
+// ---------- Axios Config ----------
+axios.defaults.withCredentials = true;
 
 export default function CutEdit() {
   const { id, cutId } = useParams();
@@ -46,15 +74,15 @@ export default function CutEdit() {
   const form = useForm({ resolver: zodResolver(schema) });
   const fileInputRef = useRef(null);
 
-  // 🔹 Cargar datos existentes
+  // ---------- Cargar datos existentes ----------
   useEffect(() => {
     (async () => {
       try {
         const res = await axios.get(`/cuts/${cutId}`);
         const cut = res.data;
         form.reset({
-          style: cut.style,
-          notes: cut.notes,
+          style: cut.style || "",
+          notes: cut.notes || "",
         });
       } catch {
         toast.error("Error al cargar corte");
@@ -63,64 +91,79 @@ export default function CutEdit() {
     })();
   }, [cutId, form, navigate, id]);
 
-  // 🔹 Enviar datos actualizados
+  // ---------- Enviar actualización ----------
   const onSubmit = async (data) => {
-    try {
-      const formData = new FormData();
-      formData.append("style", data.style);
-      if (data.notes) formData.append("notes", data.notes);
+    const formData = new FormData();
+    formData.append("style", data.style);
+    if (data.notes) formData.append("notes", data.notes);
 
-      const files = fileInputRef.current?.files;
-      if (files && files.length > 0) {
-        for (const file of files) {
-          let imageBlob = file;
+    const files = fileInputRef.current?.files;
+    const fileSummaries = [];
 
-          // 🔧 Convertir HEIC/HEIF → JPEG
-          if (
-            file.type === "image/heic" ||
-            file.type === "image/heif" ||
-            file.name.endsWith(".heic") ||
-            file.name.endsWith(".heif")
-          ) {
-            try {
-              imageBlob = await heic2any({ blob: file, toType: "image/jpeg" });
-            } catch (err) {
-              console.error("Error convirtiendo HEIC/HEIF:", err);
-            }
-          }
+    if (files && files.length > 0) {
+      for (const file of files) {
+        let imageBlob = file;
 
-          // 🔧 Convertir todo a WebP
+        // HEIC → JPEG
+        if (
+          file.type === "image/heic" ||
+          file.type === "image/heif" ||
+          file.name.endsWith(".heic") ||
+          file.name.endsWith(".heif")
+        ) {
           try {
-            const webpBlob = await convertToWebP(imageBlob);
-            const webpFile = new File(
-              [webpBlob],
-              file.name.replace(/\.[^.]+$/, ".webp"),
-              { type: "image/webp" }
-            );
-            formData.append("photos", webpFile);
+            imageBlob = await heic2any({ blob: file, toType: "image/jpeg" });
           } catch (err) {
-            console.error("Error convirtiendo a WebP:", err);
-            formData.append("photos", file); // fallback
+            console.error("Error convirtiendo HEIC/HEIF:", err);
+            toast.warning(`No se pudo convertir ${file.name} (HEIC)`);
           }
+        }
+
+        // Cualquier formato → WebP
+        try {
+          const webpBlob = await convertToWebP(imageBlob);
+          const webpFile = new File(
+            [webpBlob],
+            file.name.replace(/\.[^.]+$/, ".webp"),
+            { type: "image/webp" }
+          );
+          formData.append("photos", webpFile);
+          fileSummaries.push(
+            `${webpFile.name} (${(webpFile.size / 1024).toFixed(1)} KB)`
+          );
+        } catch (err) {
+          console.error("Error convirtiendo a WebP:", err);
+          toast.warning(
+            `No se pudo convertir ${file.name}, se enviará original`
+          );
+          formData.append("photos", file);
+          fileSummaries.push(`${file.name} (sin conversión)`);
         }
       }
 
-      await toast.promise(
-        axios.put(`/cuts/${cutId}`, formData, {
-          headers: { "Content-Type": "multipart/form-data" },
-        }),
-        {
-          loading: "Actualizando corte...",
-          success: "Corte actualizado con éxito",
-          error: "Error al actualizar corte",
-        }
+      toast.info(
+        `📸 ${files.length} archivo${files.length > 1 ? "s" : ""} actualizado${
+          files.length > 1 ? "s" : ""
+        }:\n${fileSummaries.join("\n")}`
       );
-
-      navigate(`/clients/${id}`);
-    } catch (err) {
-      console.error(err);
-      toast.error("Error inesperado al actualizar el corte");
     }
+
+    await toast.promise(
+      axios.put(`/cuts/${cutId}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      }),
+      {
+        loading: "Actualizando corte...",
+        success: "Corte actualizado con éxito",
+        error: (err) =>
+          err.response?.data?.error ||
+          `Error ${err.response?.status || ""}: ${
+            err.response?.data?.message || "Error desconocido"
+          }`,
+      }
+    );
+
+    navigate(`/clients/${id}`);
   };
 
   return (
@@ -134,7 +177,9 @@ export default function CutEdit() {
       >
         <FieldSet>
           <FieldLegend>Editar corte</FieldLegend>
-          <FieldDescription>Modificá los datos del corte.</FieldDescription>
+          <FieldDescription>
+            Modificá los datos o agregá nuevas fotos al corte.
+          </FieldDescription>
 
           <FieldGroup className="space-y-6 mt-4">
             {/* Estilo */}
@@ -152,14 +197,14 @@ export default function CutEdit() {
               <FieldLabel>Notas</FieldLabel>
               <Input
                 {...form.register("notes")}
-                placeholder="Ejemplo: Cliente pidió mantener el largo en la parte superior"
+                placeholder="Ejemplo: Mantener largo superior"
               />
               <FieldError>{form.formState.errors.notes?.message}</FieldError>
             </Field>
 
             {/* Fotos */}
             <Field>
-              <FieldLabel>Fotos</FieldLabel>
+              <FieldLabel>Fotos nuevas</FieldLabel>
               <Input
                 ref={fileInputRef}
                 type="file"
@@ -168,8 +213,8 @@ export default function CutEdit() {
                 capture="environment"
               />
               <FieldDescription>
-                Podés seleccionar nuevas imágenes (HEIC, JPG, PNG — se
-                convertirán a WebP automáticamente).
+                Podés agregar más imágenes (HEIC, JPG, PNG — se convertirán a
+                WebP automáticamente).
               </FieldDescription>
             </Field>
           </FieldGroup>

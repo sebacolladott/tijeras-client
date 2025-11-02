@@ -28,24 +28,52 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// 🧩 Validación
+// ---------- Config axios ----------
+axios.defaults.withCredentials = true;
+
+// ---------- Validación ----------
 const schema = z.object({
   barberId: z.string().min(1, "Elegí un barbero"),
   style: z.string().min(1, "Indicá el estilo"),
   notes: z.string().optional(),
 });
 
-// 🧩 Conversión a WebP
+// ---------- Conversión a WebP (con fallback para Safari) ----------
 async function convertToWebP(blob) {
-  const bitmap = await createImageBitmap(blob);
-  const canvas = document.createElement("canvas");
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  const ctx = canvas.getContext("2d");
-  ctx.drawImage(bitmap, 0, 0);
-  return new Promise((resolve) =>
-    canvas.toBlob((b) => resolve(b), "image/webp", 0.9)
-  );
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(bitmap, 0, 0);
+    return new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b), "image/webp", 0.9)
+    );
+  } catch {
+    // Fallback para navegadores sin createImageBitmap (ej: Safari iOS)
+    const img = document.createElement("img");
+    const url = URL.createObjectURL(blob);
+    await new Promise((r) => {
+      img.onload = r;
+      img.src = url;
+    });
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0);
+    return new Promise((resolve) =>
+      canvas.toBlob(
+        (b) => {
+          URL.revokeObjectURL(url);
+          resolve(b);
+        },
+        "image/webp",
+        0.9
+      )
+    );
+  }
 }
 
 export default function CutCreate() {
@@ -55,19 +83,15 @@ export default function CutCreate() {
   const [barbers, setBarbers] = useState([]);
   const fileInputRef = useRef(null);
 
-  // 🔹 Cargar barberos
+  // ---------- Cargar barberos ----------
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await axios.get("/barbers");
-        setBarbers(res.data.data || []);
-      } catch {
-        toast.error("Error al cargar barberos");
-      }
-    })();
+    axios
+      .get("/barbers")
+      .then((res) => setBarbers(res.data.data || []))
+      .catch(() => toast.error("Error al cargar barberos"));
   }, []);
 
-  // 🔹 Enviar datos y fotos convertidas a WebP
+  // ---------- Enviar datos ----------
   const onSubmit = async (data) => {
     const formData = new FormData();
     formData.append("clientId", id);
@@ -93,10 +117,11 @@ export default function CutCreate() {
             imageBlob = await heic2any({ blob: file, toType: "image/jpeg" });
           } catch (err) {
             console.error("Error convirtiendo HEIC/HEIF:", err);
+            toast.warning(`No se pudo convertir ${file.name} (HEIC)`);
           }
         }
 
-        // Cualquier imagen → WebP
+        // cualquier imagen → WebP
         try {
           const webpBlob = await convertToWebP(imageBlob);
           const webpFile = new File(
@@ -106,39 +131,39 @@ export default function CutCreate() {
           );
           formData.append("photos", webpFile);
           fileSummaries.push(
-            `${webpFile.name} (${(webpFile.size / 1024 / 1024).toFixed(2)} MB)`
+            `${webpFile.name} (${(webpFile.size / 1024).toFixed(1)} KB)`
           );
         } catch (err) {
           console.error("Error convirtiendo a WebP:", err);
+          toast.warning(
+            `No se pudo convertir ${file.name}, se enviará original`
+          );
           formData.append("photos", file);
           fileSummaries.push(`${file.name} (sin conversión)`);
         }
       }
 
-      const totalSize = Array.from(files).reduce((acc, f) => acc + f.size, 0);
-      const totalMB = (totalSize / 1024 / 1024).toFixed(2);
-
-      if (totalSize > 25 * 1024 * 1024)
-        toast.warning(`⚠️ Tamaño total alto: ${totalMB} MB`);
-
       toast.info(
-        `📸 ${files.length} archivo${
+        `📸 ${files.length} archivo${files.length > 1 ? "s" : ""} cargado${
           files.length > 1 ? "s" : ""
-        } (${totalMB} MB total):\n${fileSummaries.join("\n")}`
+        }:\n${fileSummaries.join("\n")}`
       );
     }
 
     await toast.promise(axios.post("/cuts", formData), {
-      loading: "Subiendo fotos y creando corte...",
+      loading: "Creando corte...",
       success: "Corte creado con éxito",
       error: (err) => {
-        if (err.response)
+        if (err.response) {
           return (
             err.response.data?.error ||
             `Error ${err.response.status}: ${JSON.stringify(err.response.data)}`
           );
-        if (err.request) return "El servidor no respondió";
-        return `Error: ${err.message}`;
+        } else if (err.request) {
+          return "El servidor no respondió";
+        } else {
+          return `Error: ${err.message}`;
+        }
       },
     });
 
@@ -172,11 +197,17 @@ export default function CutCreate() {
                   <SelectValue placeholder="Seleccioná un barbero" />
                 </SelectTrigger>
                 <SelectContent>
-                  {barbers.map((b) => (
-                    <SelectItem key={b.id} value={String(b.id)}>
-                      {b.name}
-                    </SelectItem>
-                  ))}
+                  {barbers.length ? (
+                    barbers.map((b) => (
+                      <SelectItem key={b.id} value={String(b.id)}>
+                        {b.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-2 text-muted-foreground text-sm">
+                      No hay barberos registrados
+                    </div>
+                  )}
                 </SelectContent>
               </Select>
               <FieldError>{form.formState.errors.barberId?.message}</FieldError>
@@ -213,7 +244,7 @@ export default function CutCreate() {
                 capture="environment"
               />
               <FieldDescription>
-                Podés subir varias imágenes (HEIC, JPG, PNG, etc. — se
+                Podés seleccionar varias imágenes (HEIC, JPG, PNG — se
                 convertirán a WebP automáticamente).
               </FieldDescription>
             </Field>

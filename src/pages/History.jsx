@@ -48,7 +48,7 @@ export default function History() {
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
-  const [sortBy, setSortBy] = useState("date");
+  const [sortBy, setSortBy] = useState("createdAt");
   const [order, setOrder] = useState("desc");
   const [limit, setLimit] = useState(10);
 
@@ -84,7 +84,7 @@ export default function History() {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedQuery, sortBy, order]);
+  }, [debouncedQuery, sortBy, order, limit]);
 
   // ---------- Eliminar corte ----------
   const handleDeleteCut = (id) => {
