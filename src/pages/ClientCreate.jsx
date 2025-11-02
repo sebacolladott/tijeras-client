@@ -6,12 +6,17 @@ import { toast } from "sonner";
 import axios from "@/lib/axios";
 
 import { Button } from "@/components/ui/button";
+import BackButton from "@/components/BackButton";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Field,
   FieldLabel,
   FieldError,
   FieldDescription,
+  FieldGroup,
+  FieldLegend,
+  FieldSet,
 } from "@/components/ui/field";
 
 const schema = z.object({
@@ -39,9 +44,15 @@ export default function ClientCreate() {
 
   return (
     <div className="space-y-8 max-w-md">
-      <h3 className="font-semibold text-lg">Nuevo cliente</h3>
-
+      <BackButton fallback="/clients" />
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <FieldSet>
+          <FieldLegend>Nuevo cliente</FieldLegend>
+          <FieldDescription>
+            Completá los datos para registrar un nuevo cliente.
+          </FieldDescription>
+
+          <FieldGroup className="space-y-6 mt-4">
         <Field>
           <FieldLabel>Nombre *</FieldLabel>
           <Input
@@ -68,15 +79,19 @@ export default function ClientCreate() {
 
         <Field>
           <FieldLabel>Notas</FieldLabel>
-          <Input
+          <Textarea
             {...form.register("notes")}
             placeholder="Ejemplo: Prefiere turnos los viernes por la tarde"
+            rows={4}
           />
           <FieldDescription>
             Agregá observaciones o detalles relevantes sobre el cliente.
           </FieldDescription>
           <FieldError>{form.formState.errors.notes?.message}</FieldError>
         </Field>
+
+          </FieldGroup>
+        </FieldSet>
 
         <div className="flex gap-2 pt-2">
           <Button

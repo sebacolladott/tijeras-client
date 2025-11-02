@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import axios from "@/lib/axios";
 
 import { Button } from "@/components/ui/button";
+import BackButton from "@/components/BackButton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -14,6 +15,9 @@ import {
   FieldLabel,
   FieldDescription,
   FieldError,
+  FieldGroup,
+  FieldLegend,
+  FieldSet,
 } from "@/components/ui/field";
 
 const schema = z.object({
@@ -53,9 +57,15 @@ export default function BarberEdit() {
 
   return (
     <div className="space-y-8 max-w-md">
-      <h3 className="font-semibold text-lg">Editar barbero</h3>
-
+      <BackButton fallback="/barbers" />
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <FieldSet>
+          <FieldLegend>Editar barbero</FieldLegend>
+          <FieldDescription>
+            Modificá los datos del barbero.
+          </FieldDescription>
+
+          <FieldGroup className="space-y-6 mt-4">
         <Field>
           <FieldLabel>Nombre *</FieldLabel>
           <Input {...form.register("name")} placeholder="Ejemplo: Juan Pérez" />
@@ -78,10 +88,10 @@ export default function BarberEdit() {
           <FieldError>{form.formState.errors.bio?.message}</FieldError>
         </Field>
 
+          </FieldGroup>
+        </FieldSet>
+
         <div className="flex gap-2 pt-2">
-          <Button type="submit" className="w-28">
-            Guardar
-          </Button>
           <Button
             type="button"
             variant="outline"
@@ -89,6 +99,9 @@ export default function BarberEdit() {
             onClick={() => navigate("/barbers")}
           >
             Cancelar
+          </Button>
+          <Button type="submit" className="w-28">
+            Guardar
           </Button>
         </div>
       </form>

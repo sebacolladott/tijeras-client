@@ -10,7 +10,7 @@ import { useUserStore } from "@/stores/userStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
-import { ArrowLeftIcon, RotateCcwIcon } from "lucide-react";
+import { RotateCcwIcon } from "lucide-react";
 
 const schema = z.object({
   newPassword: z.string().min(6, "Minimo 6 caracteres"),
@@ -72,12 +72,7 @@ export default function ResetPassword() {
             Restablecer
           </Button>
 
-          <Button asChild variant="outline" className="w-full">
-            <Link to="/login">
-              <ArrowLeftIcon />
-              Volver al inicio de sesion
-            </Link>
-          </Button>
+          
         </form>
       </div>
     </div>

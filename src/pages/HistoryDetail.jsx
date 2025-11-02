@@ -4,10 +4,10 @@ import { toast } from "sonner";
 import axios from "@/lib/axios";
 
 import { Button } from "@/components/ui/button";
+import BackButton from "@/components/BackButton";
 import { PhotoProvider, PhotoView } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
 import {
-  ArrowLeftIcon,
   CameraIcon,
   Trash2Icon,
   PencilIcon,
@@ -87,11 +87,7 @@ export default function HistoryDetail() {
     <section className="space-y-5">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <Button variant="ghost" onClick={() => navigate(-1)}>
-          <ArrowLeftIcon className="mr-1 w-4 h-4" />
-          Volver
-        </Button>
-
+        <BackButton fallback="/history" />
         <div className="flex gap-2">
           <Button
             variant="outline"

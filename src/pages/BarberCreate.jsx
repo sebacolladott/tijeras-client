@@ -6,6 +6,7 @@ import { useNavigate } from "react-router";
 import axios from "@/lib/axios";
 
 import { Button } from "@/components/ui/button";
+import BackButton from "@/components/BackButton";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -41,6 +42,7 @@ export default function BarberCreate() {
 
   return (
     <div className="space-y-8 max-w-md">
+      <BackButton fallback="/barbers" />
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         <FieldSet>
           <FieldLegend>Nuevo barbero</FieldLegend>
@@ -86,9 +88,6 @@ export default function BarberCreate() {
         </FieldSet>
 
         <div className="flex gap-2 pt-2">
-          <Button type="submit" className="w-28">
-            Guardar
-          </Button>
           <Button
             type="button"
             variant="outline"
@@ -96,6 +95,9 @@ export default function BarberCreate() {
             onClick={() => navigate("/barbers")}
           >
             Cancelar
+          </Button>
+          <Button type="submit" className="w-28">
+            Guardar
           </Button>
         </div>
       </form>

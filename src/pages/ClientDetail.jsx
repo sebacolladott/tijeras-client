@@ -4,8 +4,8 @@ import { toast } from "sonner";
 import axios from "@/lib/axios";
 
 import { Button } from "@/components/ui/button";
+import BackButton from "@/components/BackButton";
 import {
-  ArrowLeftIcon,
   CameraIcon,
   EyeIcon,
   PencilIcon,
@@ -96,11 +96,7 @@ export default function ClientDetail() {
     <section className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
-        <Button variant="ghost" onClick={() => navigate(-1)}>
-          <ArrowLeftIcon className="mr-1 w-4 h-4" />
-          Volver
-        </Button>
-
+        <BackButton fallback="/clients" />
         <div className="flex gap-2">
           <Button
             variant="outline"

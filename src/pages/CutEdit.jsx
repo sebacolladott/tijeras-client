@@ -7,12 +7,17 @@ import { toast } from "sonner";
 import axios from "@/lib/axios";
 
 import { Button } from "@/components/ui/button";
+import BackButton from "@/components/BackButton";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Field,
   FieldLabel,
   FieldError,
   FieldDescription,
+  FieldGroup,
+  FieldLegend,
+  FieldSet,
 } from "@/components/ui/field";
 
 const schema = z.object({
@@ -70,12 +75,18 @@ export default function CutEdit() {
 
   return (
     <div className="space-y-8 max-w-md">
-      <h3 className="font-semibold text-lg">Editar corte</h3>
-
+      <BackButton fallback={`/clients/${id}`} />
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <FieldSet>
+          <FieldLegend>Editar corte</FieldLegend>
+          <FieldDescription>
+            Modificá los datos del corte.
+          </FieldDescription>
+
+          <FieldGroup className="space-y-6 mt-4">
         <Field>
           <FieldLabel>Estilo *</FieldLabel>
-          <Input
+          <Textarea
             {...form.register("style")}
             placeholder="Ejemplo: Fade medio con navaja"
           />
@@ -89,6 +100,7 @@ export default function CutEdit() {
           <FieldLabel>Notas</FieldLabel>
           <Input
             {...form.register("notes")}
+            rows={4}
             placeholder="Ejemplo: Cliente pidió mantener el largo en la parte superior"
           />
           <FieldDescription>
@@ -117,6 +129,9 @@ export default function CutEdit() {
             </FieldDescription>
           )}
         </Field>
+
+          </FieldGroup>
+        </FieldSet>
 
         <div className="flex gap-2 pt-2">
           <Button

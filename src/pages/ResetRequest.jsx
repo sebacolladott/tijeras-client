@@ -16,7 +16,7 @@ import {
   FieldLabel,
   FieldSet,
 } from "@/components/ui/field";
-import { ArrowLeftIcon, SendIcon } from "lucide-react";
+import { SendIcon } from "lucide-react";
 
 const schema = z.object({
   email: z.string().email("Email invalido"),
@@ -72,12 +72,7 @@ export default function ResetRequest() {
             Enviar enlace
           </Button>
 
-          <Button asChild variant="outline" className="w-full">
-            <Link to="/login">
-              <ArrowLeftIcon />
-              Volver al inicio de sesion
-            </Link>
-          </Button>
+          
         </form>
       </div>
     </div>

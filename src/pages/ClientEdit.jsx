@@ -7,12 +7,17 @@ import { toast } from "sonner";
 import axios from "@/lib/axios";
 
 import { Button } from "@/components/ui/button";
+import BackButton from "@/components/BackButton";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Field,
   FieldLabel,
   FieldError,
   FieldDescription,
+  FieldGroup,
+  FieldLegend,
+  FieldSet,
 } from "@/components/ui/field";
 
 const schema = z.object({
@@ -53,9 +58,15 @@ export default function ClientEdit() {
 
   return (
     <div className="space-y-8 max-w-md">
-      <h3 className="font-semibold text-lg">Editar cliente</h3>
-
+      <BackButton fallback="/clients" />
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        <FieldSet>
+          <FieldLegend>Editar cliente</FieldLegend>
+          <FieldDescription>
+            Modificá los datos del cliente.
+          </FieldDescription>
+
+          <FieldGroup className="space-y-6 mt-4">
         <Field>
           <FieldLabel>Nombre *</FieldLabel>
           <Input
@@ -82,9 +93,10 @@ export default function ClientEdit() {
 
         <Field>
           <FieldLabel>Notas</FieldLabel>
-          <Input
+          <Textarea
             {...form.register("notes")}
             placeholder="Ejemplo: Prefiere cortes los viernes a la tarde"
+            rows={4}
           />
           <FieldDescription>
             Podés editar observaciones o comentarios del cliente.
@@ -92,10 +104,10 @@ export default function ClientEdit() {
           <FieldError>{form.formState.errors.notes?.message}</FieldError>
         </Field>
 
+          </FieldGroup>
+        </FieldSet>
+
         <div className="flex gap-2 pt-2">
-          <Button type="submit" className="w-28">
-            Guardar
-          </Button>
           <Button
             type="button"
             variant="outline"
@@ -103,6 +115,9 @@ export default function ClientEdit() {
             onClick={() => navigate("/clients")}
           >
             Cancelar
+          </Button>
+          <Button type="submit" className="w-28">
+            Guardar
           </Button>
         </div>
       </form>
