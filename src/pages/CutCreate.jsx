@@ -75,7 +75,7 @@ export default function CutCreate() {
         }
 
         try {
-          const convertedBlob = await convertToJPG(file);
+          const convertedBlob = await convertToWebP(file);
           convertedFiles.push(convertedBlob);
           formData.append(
             "photos",
@@ -125,7 +125,12 @@ export default function CutCreate() {
   };
 
   // ---------- Función para convertir a JPG ----------
-  const convertToJPG = (file, maxWidth = 1920, maxHeight = 1920) => {
+  const convertToWebP = (
+    file,
+    maxWidth = 1280,
+    maxHeight = 1280,
+    quality = 0.55
+  ) => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
@@ -135,7 +140,7 @@ export default function CutCreate() {
         img.onload = () => {
           let { width, height } = img;
 
-          // Redimensionar si es necesario
+          // Redimensionar manteniendo proporción
           if (width > maxWidth || height > maxHeight) {
             const ratio = Math.min(maxWidth / width, maxHeight / height);
             width = Math.round(width * ratio);
@@ -145,8 +150,9 @@ export default function CutCreate() {
           const canvas = document.createElement("canvas");
           canvas.width = width;
           canvas.height = height;
-
           const ctx = canvas.getContext("2d");
+
+          // Fondo blanco (por si vienen imágenes con transparencia)
           ctx.fillStyle = "white";
           ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
@@ -154,13 +160,19 @@ export default function CutCreate() {
           canvas.toBlob(
             (blob) => {
               if (blob) {
-                resolve(blob);
-              } else {
-                reject(new Error("No se pudo convertir la imagen"));
-              }
+                // Si sigue pesando demasiado, reintenta con menos calidad
+                if (blob.size > 500 * 1024 && quality > 0.3) {
+                  console.log("Reintentando con menor calidad...");
+                  resolve(
+                    convertToWebP(file, maxWidth, maxHeight, quality - 0.1)
+                  );
+                } else {
+                  resolve(blob);
+                }
+              } else reject(new Error("No se pudo convertir la imagen"));
             },
-            "image/jpeg",
-            0.9
+            "image/webp",
+            quality
           );
         };
 
