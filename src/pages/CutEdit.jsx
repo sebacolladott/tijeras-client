@@ -5,6 +5,7 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import axios from "@/lib/axios";
+import heic2any from "heic2any";
 
 import { Button } from "@/components/ui/button";
 import BackButton from "@/components/BackButton";
@@ -20,10 +21,24 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 
+// ✅ Validación
 const schema = z.object({
   style: z.string().min(1, "Indicá el estilo"),
   notes: z.string().optional(),
 });
+
+// ✅ Conversión genérica a WebP
+async function convertToWebP(blob) {
+  const bitmap = await createImageBitmap(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0);
+  return new Promise((resolve) =>
+    canvas.toBlob((b) => resolve(b), "image/webp", 0.9)
+  );
+}
 
 export default function CutEdit() {
   const { id, cutId } = useParams();
@@ -31,6 +46,7 @@ export default function CutEdit() {
   const form = useForm({ resolver: zodResolver(schema) });
   const fileInputRef = useRef(null);
 
+  // 🔹 Cargar datos existentes
   useEffect(() => {
     (async () => {
       try {
@@ -47,6 +63,7 @@ export default function CutEdit() {
     })();
   }, [cutId, form, navigate, id]);
 
+  // 🔹 Enviar datos actualizados
   const onSubmit = async (data) => {
     try {
       const formData = new FormData();
@@ -56,32 +73,35 @@ export default function CutEdit() {
       const files = fileInputRef.current?.files;
       if (files && files.length > 0) {
         for (const file of files) {
-          let toSend = file;
+          let imageBlob = file;
 
-          // ✅ Conversión HEIC → JPEG si viene de iPhone
-          if (file.type === "image/heic" || file.name.endsWith(".heic")) {
-            const blob = await fetch(URL.createObjectURL(file)).then((r) =>
-              r.blob()
-            );
-            const imageBitmap = await createImageBitmap(blob);
-            const canvas = document.createElement("canvas");
-            canvas.width = imageBitmap.width;
-            canvas.height = imageBitmap.height;
-            const ctx = canvas.getContext("2d");
-            ctx.drawImage(imageBitmap, 0, 0);
-            const convertedBlob = await new Promise((res) =>
-              canvas.toBlob(res, "image/jpeg", 0.9)
-            );
-            toSend = new File(
-              [convertedBlob],
-              file.name.replace(/\.heic$/i, ".jpg"),
-              {
-                type: "image/jpeg",
-              }
-            );
+          // 🔧 Convertir HEIC/HEIF → JPEG
+          if (
+            file.type === "image/heic" ||
+            file.type === "image/heif" ||
+            file.name.endsWith(".heic") ||
+            file.name.endsWith(".heif")
+          ) {
+            try {
+              imageBlob = await heic2any({ blob: file, toType: "image/jpeg" });
+            } catch (err) {
+              console.error("Error convirtiendo HEIC/HEIF:", err);
+            }
           }
 
-          formData.append("photos", toSend);
+          // 🔧 Convertir todo a WebP
+          try {
+            const webpBlob = await convertToWebP(imageBlob);
+            const webpFile = new File(
+              [webpBlob],
+              file.name.replace(/\.[^.]+$/, ".webp"),
+              { type: "image/webp" }
+            );
+            formData.append("photos", webpFile);
+          } catch (err) {
+            console.error("Error convirtiendo a WebP:", err);
+            formData.append("photos", file); // fallback
+          }
         }
       }
 
@@ -107,7 +127,11 @@ export default function CutEdit() {
     <div className="space-y-8 max-w-md">
       <BackButton fallback={`/clients/${id}`} />
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form
+        onSubmit={form.handleSubmit(onSubmit)}
+        className="space-y-8"
+        encType="multipart/form-data"
+      >
         <FieldSet>
           <FieldLegend>Editar corte</FieldLegend>
           <FieldDescription>Modificá los datos del corte.</FieldDescription>
@@ -144,7 +168,8 @@ export default function CutEdit() {
                 capture="environment"
               />
               <FieldDescription>
-                Podés seleccionar varias imágenes nuevas (HEIC, JPG, PNG).
+                Podés seleccionar nuevas imágenes (HEIC, JPG, PNG — se
+                convertirán a WebP automáticamente).
               </FieldDescription>
             </Field>
           </FieldGroup>
