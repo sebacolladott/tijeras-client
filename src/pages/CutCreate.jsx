@@ -44,7 +44,7 @@ async function processImage(file) {
   try {
     let image = file;
 
-    // HEIC → JPEG
+    // --- 1. HEIC → JPEG ---
     if (
       file.type === "image/heic" ||
       file.type === "image/heif" ||
@@ -52,36 +52,52 @@ async function processImage(file) {
       file.name.endsWith(".heif")
     ) {
       try {
-        image = await heic2any({ blob: file, toType: "image/jpeg" });
+        const converted = await heic2any({ blob: file, toType: "image/jpeg" });
+        // heic2any devuelve un Blob, así que lo forzamos a File
+        image = new File([converted], file.name.replace(/\.[^.]+$/, ".jpg"), {
+          type: "image/jpeg",
+        });
       } catch (err) {
         console.warn("Error convirtiendo HEIC:", err);
         toast.warning(`No se pudo convertir ${file.name} (HEIC)`);
       }
     }
 
-    // 🔹 Safari a veces devuelve un Blob sin tipo
-    if (
-      !(image instanceof File) ||
-      !image.type ||
-      image.type === "application/octet-stream"
-    ) {
+    // --- 2. Asegurar que sea File válido ---
+    if (!(image instanceof File)) {
       image = new File([image], file.name.replace(/\.[^.]+$/, ".jpg"), {
-        type: "image/jpeg",
+        type: image.type || "image/jpeg",
       });
     }
 
-    // 🔹 Compresión final a WebP
-    const compressed = await imageCompression(image, {
+    // --- 3. Compresión ---
+    const compressedBlob = await imageCompression(image, {
       maxSizeMB: 1,
       maxWidthOrHeight: 1920,
       useWebWorker: true,
       fileType: "image/webp",
     });
 
-    // 🔹 Aseguramos tipo MIME correcto
-    return new File([compressed], file.name.replace(/\.[^.]+$/, ".webp"), {
-      type: "image/webp",
+    // ⚠️ browser-image-compression a veces devuelve Blob sin tipo en iOS
+    const mime =
+      compressedBlob.type && compressedBlob.type !== ""
+        ? compressedBlob.type
+        : "image/webp";
+
+    // --- 4. Reconvertir a File con tipo y nombre fijos ---
+    const finalFile = new File(
+      [compressedBlob],
+      file.name.replace(/\.[^.]+$/, ".webp"),
+      { type: mime }
+    );
+
+    console.log("✅ Archivo final:", {
+      name: finalFile.name,
+      type: finalFile.type,
+      size: finalFile.size,
     });
+
+    return finalFile;
   } catch (err) {
     console.error("Error procesando imagen:", err);
     toast.warning(`No se pudo procesar ${file.name}, se enviará original`);
