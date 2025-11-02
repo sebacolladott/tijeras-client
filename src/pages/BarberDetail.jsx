@@ -10,6 +10,7 @@ import {
   EyeIcon,
   ScissorsIcon,
   Trash2Icon,
+  PencilIcon,
 } from "lucide-react";
 import { formatCutDate } from "@/lib/date";
 
@@ -39,6 +40,28 @@ export default function BarberDetail() {
   if (!barber)
     return <p className="text-muted-foreground text-sm">Cargando...</p>;
 
+  const handleDeleteBarber = () => {
+    toast("¿Eliminar barbero?", {
+      description:
+        "Esta acción eliminará al barbero y sus registros asociados.",
+      action: {
+        label: "Eliminar",
+        onClick: async () =>
+          toast.promise(
+            (async () => {
+              await axios.delete(`/barbers/${id}`);
+              navigate("/barbers");
+            })(),
+            {
+              loading: "Eliminando barbero...",
+              success: "Barbero eliminado",
+              error: "Error al eliminar barbero",
+            }
+          ),
+      },
+    });
+  };
+
   const handleDeleteCut = (cutId) => {
     toast("¿Eliminar corte?", {
       description: "Esta acción no se puede deshacer.",
@@ -62,11 +85,26 @@ export default function BarberDetail() {
 
   return (
     <section className="space-y-5">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <Button variant="ghost" onClick={() => navigate(-1)}>
           <ArrowLeftIcon className="mr-1 w-4 h-4" />
           Volver
         </Button>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/barbers/${id}/edit`)}
+          >
+            <PencilIcon className="mr-1 w-4 h-4" />
+            Editar
+          </Button>
+          <Button variant="outline" onClick={handleDeleteBarber}>
+            <Trash2Icon className="mr-1 w-4 h-4 text-destructive" />
+            Eliminar
+          </Button>
+        </div>
       </div>
 
       {/* Info del barbero */}
@@ -101,7 +139,10 @@ export default function BarberDetail() {
                   {cut.style || "Sin estilo"}
                 </p>
                 <p className="mt-1 text-muted-foreground text-xs">
-                  {formatCutDate(cut, { dateStyle: "medium", timeStyle: "short" }) || "Sin fecha"}
+                  {formatCutDate(cut, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }) || "Sin fecha"}
                 </p>
 
                 <div className="flex justify-between mt-2 text-muted-foreground text-xs">
@@ -113,7 +154,7 @@ export default function BarberDetail() {
                     <Button
                       size="icon"
                       variant="outline"
-                      onClick={() => navigate(`/cuts/${cut.id}`)}
+                      onClick={() => navigate(`/history/${cut.id}`)}
                       title="Ver detalle"
                     >
                       <EyeIcon className="w-4 h-4" />

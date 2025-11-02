@@ -2,22 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import axios from "@/lib/axios";
+
+import { formatCutDate } from "@/lib/date";
 import { useDebounce } from "@/hooks/useDebounce";
 
 import { Button } from "@/components/ui/button";
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupInput,
-} from "@/components/ui/input-group";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -26,92 +15,109 @@ import {
 } from "@/components/ui/context-menu";
 
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+import {
+  CameraIcon,
   EyeIcon,
   PencilIcon,
-  PlusIcon,
   Trash2Icon,
   SearchIcon,
   DeleteIcon,
   ArrowLeftIcon,
   ArrowRightIcon,
 } from "lucide-react";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 
-export default function Barbers() {
+export default function History() {
   const navigate = useNavigate();
-  const [barbers, setBarbers] = useState([]);
-  const [totalBarbers, setTotalBarbers] = useState(0);
+
+  const [cuts, setCuts] = useState([]);
+  const [totalCuts, setTotalCuts] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
-  const debouncedQuery = useDebounce(query, 500);
+  const [sortBy, setSortBy] = useState("date");
+  const [order, setOrder] = useState("desc");
   const [limit, setLimit] = useState(10);
-  const [sortBy, setSortBy] = useState("name");
-  const [order, setOrder] = useState("asc");
 
-  // ---------- Datos ----------
-  const fetchBarbers = useCallback(async () => {
+  const debouncedQuery = useDebounce(query, 500);
+
+  // ---------- Fetch cortes ----------
+  const fetchCuts = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await axios.get("/barbers", {
-        params: { page, limit, q: debouncedQuery || undefined, sortBy, order },
+      const res = await axios.get("/cuts", {
+        params: {
+          page,
+          limit,
+          q: debouncedQuery || undefined,
+          sortBy,
+          order,
+        },
       });
-      setBarbers(res.data.data);
-      setTotalBarbers(res.data.total);
+
+      setCuts(res.data.data);
+      setTotalCuts(res.data.total);
       setTotalPages(res.data.totalPages);
     } catch {
-      toast.error("Error al cargar barberos");
+      toast.error("Error al cargar cortes");
     } finally {
       setLoading(false);
     }
-  }, [page, debouncedQuery, sortBy, order, limit]);
+  }, [page, limit, debouncedQuery, sortBy, order]);
 
   useEffect(() => {
-    fetchBarbers();
-  }, [fetchBarbers]);
+    fetchCuts();
+  }, [fetchCuts]);
 
   useEffect(() => {
     setPage(1);
   }, [debouncedQuery, sortBy, order]);
 
-  // ---------- Eliminar ----------
-  const handleDelete = (id) => {
-    toast("¿Eliminar barbero?", {
+  // ---------- Eliminar corte ----------
+  const handleDeleteCut = (id) => {
+    toast("¿Eliminar corte?", {
       action: {
         label: "Eliminar",
         onClick: async () => {
-          await toast.promise(axios.delete(`/barbers/${id}`), {
-            loading: "Eliminando...",
-            success: "Barbero eliminado",
+          await toast.promise(axios.delete(`/cuts/${id}`), {
+            loading: "Eliminando corte...",
+            success: "Corte eliminado",
             error: "Error al eliminar",
           });
-          fetchBarbers();
+          await fetchCuts();
         },
       },
     });
   };
 
-  const isEmpty = barbers.length === 0;
+  const isEmpty = cuts.length === 0;
 
   // ---------- Render ----------
   return (
     <>
+      {/* Header */}
       <div className="flex justify-between items-center">
-        <h3 className="font-semibold text-lg">Barberos</h3>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate("/barbers/new")}
-        >
-          <PlusIcon /> Agregar
-        </Button>
+        <h3 className="font-semibold text-lg">Historial de cortes</h3>
       </div>
 
-      {/* Buscador */}
+      {/* Buscador + Orden */}
       <div className="flex flex-wrap items-center gap-3 mt-4">
         <InputGroup>
           <InputGroupInput
-            placeholder="Buscar barberos por nombre o bio..."
+            placeholder="Buscar cortes por cliente, barbero o estilo..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -119,7 +125,7 @@ export default function Barbers() {
             <SearchIcon />
           </InputGroupAddon>
           <InputGroupAddon align="inline-end">
-            {loading ? "..." : `${totalBarbers} resultados`}
+            {loading ? "..." : `${totalCuts} resultados`}
             {query && (
               <InputGroupButton
                 variant="secondary"
@@ -137,7 +143,8 @@ export default function Barbers() {
               <SelectValue placeholder="Ordenar por" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="name">Nombre</SelectItem>
+              <SelectItem value="date">Fecha</SelectItem>
+              <SelectItem value="style">Estilo</SelectItem>
               <SelectItem value="createdAt">Creado</SelectItem>
             </SelectContent>
           </Select>
@@ -159,7 +166,7 @@ export default function Barbers() {
         <div className="w-full h-full overflow-auto">
           {loading && isEmpty ? (
             <div className="py-10 text-muted-foreground text-center">
-              Cargando barberos...
+              Cargando cortes...
             </div>
           ) : isEmpty ? (
             <div className="py-10 text-muted-foreground text-center">
@@ -167,34 +174,52 @@ export default function Barbers() {
             </div>
           ) : (
             <div className="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 mt-6">
-              {barbers.map((barber) => (
-                <ContextMenu key={barber.id}>
+              {cuts.map((cut) => (
+                <ContextMenu key={cut.id}>
                   <ContextMenuTrigger asChild>
                     <div
-                      onClick={() => navigate(`/barbers/${barber.id}`)}
+                      onClick={() => navigate(`/history/${cut.id}`)}
                       className="hover:bg-accent/50 p-4 border rounded-lg transition cursor-pointer"
                     >
-                      <h4 className="font-medium text-sm">{barber.name}</h4>
+                      <h4 className="font-medium text-sm">
+                        {cut.client?.name || "Sin cliente"}
+                      </h4>
                       <p className="text-muted-foreground text-xs">
-                        {barber.bio || "Sin biografía"}
+                        {cut.barber?.name || "-"}
                       </p>
+                      <p className="mt-1 text-muted-foreground text-xs">
+                        {formatCutDate(cut, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        }) || "Sin fecha"}
+                      </p>
+
+                      <div className="flex justify-between mt-3 text-muted-foreground text-xs">
+                        <span>{cut.style || "Sin estilo"}</span>
+                        <div className="flex items-center gap-1">
+                          <CameraIcon className="w-3 h-3" />
+                          <span>{cut.photos?.length || 0}</span>
+                        </div>
+                      </div>
                     </div>
                   </ContextMenuTrigger>
 
                   <ContextMenuContent>
                     <ContextMenuItem
-                      onClick={() => navigate(`/barbers/${barber.id}`)}
+                      onClick={() => navigate(`/history/${cut.id}`)}
                     >
                       <EyeIcon className="mr-2 w-4 h-4" /> Ver detalle
                     </ContextMenuItem>
                     <ContextMenuItem
-                      onClick={() => navigate(`/barbers/${barber.id}/edit`)}
+                      onClick={() =>
+                        navigate(`/clients/${cut.clientId}/cuts/${cut.id}/edit`)
+                      }
                     >
                       <PencilIcon className="mr-2 w-4 h-4" /> Editar
                     </ContextMenuItem>
                     <ContextMenuItem
                       className="text-destructive"
-                      onClick={() => handleDelete(barber.id)}
+                      onClick={() => handleDeleteCut(cut.id)}
                     >
                       <Trash2Icon className="mr-2 w-4 h-4" /> Eliminar
                     </ContextMenuItem>

@@ -8,6 +8,8 @@ import {
   ArrowLeftIcon,
   CameraIcon,
   EyeIcon,
+  PencilIcon,
+  PlusIcon,
   ScissorsIcon,
   Trash2Icon,
 } from "lucide-react";
@@ -18,6 +20,7 @@ export default function ClientDetail() {
   const navigate = useNavigate();
   const [client, setClient] = useState(null);
   const [cuts, setCuts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
@@ -26,18 +29,37 @@ export default function ClientDetail() {
           axios.get(`/clients/${id}`),
           axios.get(`/cuts?clientId=${id}`),
         ]);
-
         setClient(clientRes.data);
         setCuts(cutsRes.data.data || []);
       } catch (err) {
         console.error("Error cargando datos:", err);
         toast.error("Error al cargar cliente o cortes");
+      } finally {
+        setLoading(false);
       }
     })();
   }, [id]);
 
-  if (!client)
-    return <p className="text-muted-foreground text-sm">Cargando...</p>;
+  const handleDeleteClient = () => {
+    toast("¿Eliminar cliente?", {
+      description: "Esta acción eliminará al cliente y sus cortes asociados.",
+      action: {
+        label: "Eliminar",
+        onClick: async () =>
+          toast.promise(
+            (async () => {
+              await axios.delete(`/clients/${id}`);
+              navigate("/clients");
+            })(),
+            {
+              loading: "Eliminando cliente...",
+              success: "Cliente eliminado",
+              error: "Error al eliminar cliente",
+            }
+          ),
+      },
+    });
+  };
 
   const handleDeleteCut = (cutId) => {
     toast("¿Eliminar corte?", {
@@ -60,13 +82,36 @@ export default function ClientDetail() {
     });
   };
 
+  if (loading)
+    return <p className="text-muted-foreground text-sm">Cargando...</p>;
+
+  if (!client)
+    return (
+      <p className="text-destructive text-sm">
+        No se encontró el cliente solicitado.
+      </p>
+    );
+
   return (
-    <section className="space-y-5">
+    <section className="space-y-6">
+      {/* Header */}
       <div className="flex justify-between items-center">
         <Button variant="ghost" onClick={() => navigate(-1)}>
           <ArrowLeftIcon className="mr-1 w-4 h-4" />
           Volver
         </Button>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/clients/${id}/edit`)}
+          >
+            <PencilIcon className="mr-1 w-4 h-4" /> Editar cliente
+          </Button>
+          <Button variant="destructive" onClick={handleDeleteClient}>
+            <Trash2Icon className="mr-1 w-4 h-4" /> Eliminar
+          </Button>
+        </div>
       </div>
 
       {/* Info del cliente */}
@@ -87,6 +132,13 @@ export default function ClientDetail() {
         <p className="mt-2 text-sm">
           <b>Cantidad de cortes:</b> {cuts.length}
         </p>
+
+        <div className="flex justify-end">
+          <Button onClick={() => navigate(`/clients/${id}/cuts/new`)}>
+            <PlusIcon className="mr-1 w-4 h-4" />
+            Nuevo corte
+          </Button>
+        </div>
       </div>
 
       {/* Lista de cortes */}
@@ -96,7 +148,7 @@ export default function ClientDetail() {
           <h4 className="font-medium text-sm">Cortes realizados</h4>
         </div>
 
-        {cuts.length ? (
+        {cuts.length > 0 ? (
           <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
             {cuts.map((cut) => (
               <div
@@ -110,7 +162,10 @@ export default function ClientDetail() {
                   {cut.style || "Sin estilo"}
                 </p>
                 <p className="mt-1 text-muted-foreground text-xs">
-                  {formatCutDate(cut, { dateStyle: "medium", timeStyle: "short" }) || "Sin fecha"}
+                  {formatCutDate(cut, {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }) || "Sin fecha"}
                 </p>
 
                 <div className="flex justify-between mt-2 text-muted-foreground text-xs">
@@ -122,16 +177,26 @@ export default function ClientDetail() {
                     <Button
                       size="icon"
                       variant="outline"
-                      onClick={() => navigate(`/cuts/${cut.id}`)}
                       title="Ver detalle"
+                      onClick={() => navigate(`/history/${cut.id}`)}
                     >
                       <EyeIcon className="w-4 h-4" />
                     </Button>
                     <Button
                       size="icon"
                       variant="outline"
-                      onClick={() => handleDeleteCut(cut.id)}
+                      title="Editar corte"
+                      onClick={() =>
+                        navigate(`/clients/${id}/cuts/${cut.id}/edit`)
+                      }
+                    >
+                      <PencilIcon className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
                       title="Eliminar corte"
+                      onClick={() => handleDeleteCut(cut.id)}
                     >
                       <Trash2Icon className="w-4 h-4 text-destructive" />
                     </Button>

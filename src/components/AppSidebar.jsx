@@ -252,21 +252,14 @@ function AppSidebar() {
             <SidebarGroupContent>
               <SidebarMenu>
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/stats")}>
-                    <Link to="/stats">
-                      <SquareScissorsIcon />
-                      Estadísticas
+                  <SidebarMenuButton asChild isActive={isActive("/clients")}>
+                    <Link to="/clients">
+                      <CircleUserRoundIcon />
+                      Clientes
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/schedule")}>
-                    <Link to="/schedule">
-                      <SquareScissorsIcon />
-                      Agenda
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={isActive("/barbers")}>
                     <Link to="/barbers">
@@ -275,11 +268,21 @@ function AppSidebar() {
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={isActive("/clients")}>
-                    <Link to="/clients">
-                      <CircleUserRoundIcon />
-                      Clientes
+                  <SidebarMenuButton asChild isActive={isActive("/history")}>
+                    <Link to="/history">
+                      <SquareScissorsIcon />
+                      Historial
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={isActive("/stats")}>
+                    <Link to="/stats">
+                      <SquareScissorsIcon />
+                      Estadísticas
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
