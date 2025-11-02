@@ -96,7 +96,7 @@ export default function CutCreate() {
           }
         }
 
-        // cualquier imagen → WebP
+        // Cualquier imagen → WebP
         try {
           const webpBlob = await convertToWebP(imageBlob);
           const webpFile = new File(
@@ -106,7 +106,7 @@ export default function CutCreate() {
           );
           formData.append("photos", webpFile);
           fileSummaries.push(
-            `${webpFile.name} (${(webpFile.size / 1024).toFixed(1)} KB)`
+            `${webpFile.name} (${(webpFile.size / 1024 / 1024).toFixed(2)} MB)`
           );
         } catch (err) {
           console.error("Error convirtiendo a WebP:", err);
@@ -115,27 +115,30 @@ export default function CutCreate() {
         }
       }
 
-      // Mostrar resumen antes de enviar
+      const totalSize = Array.from(files).reduce((acc, f) => acc + f.size, 0);
+      const totalMB = (totalSize / 1024 / 1024).toFixed(2);
+
+      if (totalSize > 25 * 1024 * 1024)
+        toast.warning(`⚠️ Tamaño total alto: ${totalMB} MB`);
+
       toast.info(
-        `📸 ${files.length} archivo${files.length > 1 ? "s" : ""} cargado${
+        `📸 ${files.length} archivo${
           files.length > 1 ? "s" : ""
-        }:\n${fileSummaries.join("\n")}`
+        } (${totalMB} MB total):\n${fileSummaries.join("\n")}`
       );
     }
 
     await toast.promise(axios.post("/cuts", formData), {
-      loading: "Creando corte...",
+      loading: "Subiendo fotos y creando corte...",
       success: "Corte creado con éxito",
       error: (err) => {
-        if (err.response) {
-          return `Error ${err.response.status}: ${
-            err.response.data.message || JSON.stringify(err.response.data)
-          }`;
-        } else if (err.request) {
-          return "El servidor no respondió";
-        } else {
-          return `Error: ${err.message}`;
-        }
+        if (err.response)
+          return (
+            err.response.data?.error ||
+            `Error ${err.response.status}: ${JSON.stringify(err.response.data)}`
+          );
+        if (err.request) return "El servidor no respondió";
+        return `Error: ${err.message}`;
       },
     });
 
@@ -210,7 +213,7 @@ export default function CutCreate() {
                 capture="environment"
               />
               <FieldDescription>
-                Podés seleccionar varias imágenes (HEIC, JPG, PNG — se
+                Podés subir varias imágenes (HEIC, JPG, PNG, etc. — se
                 convertirán a WebP automáticamente).
               </FieldDescription>
             </Field>
