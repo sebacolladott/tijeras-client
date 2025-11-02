@@ -59,51 +59,29 @@ async function processImage(file) {
       }
     }
 
-    // ✅ Forzar que sea siempre un File (Safari necesita esto)
-    if (!(image instanceof File)) {
+    // 🔹 Safari a veces devuelve un Blob sin tipo
+    if (
+      !(image instanceof File) ||
+      !image.type ||
+      image.type === "application/octet-stream"
+    ) {
       image = new File([image], file.name.replace(/\.[^.]+$/, ".jpg"), {
         type: "image/jpeg",
       });
     }
 
-    // ✅ Compresión normal
-    try {
-      const compressed = await imageCompression(image, {
-        maxSizeMB: 1,
-        maxWidthOrHeight: 1920,
-        useWebWorker: true,
-        fileType: "image/webp",
-      });
+    // 🔹 Compresión final a WebP
+    const compressed = await imageCompression(image, {
+      maxSizeMB: 1,
+      maxWidthOrHeight: 1920,
+      useWebWorker: true,
+      fileType: "image/webp",
+    });
 
-      return new File([compressed], file.name.replace(/\.[^.]+$/, ".webp"), {
-        type: "image/webp",
-      });
-    } catch (err) {
-      // 🔁 Fallback manual
-      console.warn("Fallback a compresión básica:", err);
-      const img = document.createElement("img");
-      img.src = URL.createObjectURL(image);
-      await new Promise((r) => (img.onload = r));
-      const canvas = document.createElement("canvas");
-      const ratio = Math.min(1920 / img.width, 1920 / img.height, 1);
-      canvas.width = img.width * ratio;
-      canvas.height = img.height * ratio;
-      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(img.src);
-
-      return new Promise((resolve) =>
-        canvas.toBlob(
-          (b) =>
-            resolve(
-              new File([b], file.name.replace(/\.[^.]+$/, ".webp"), {
-                type: "image/webp",
-              })
-            ),
-          "image/webp",
-          0.8
-        )
-      );
-    }
+    // 🔹 Aseguramos tipo MIME correcto
+    return new File([compressed], file.name.replace(/\.[^.]+$/, ".webp"), {
+      type: "image/webp",
+    });
   } catch (err) {
     console.error("Error procesando imagen:", err);
     toast.warning(`No se pudo procesar ${file.name}, se enviará original`);
@@ -148,10 +126,21 @@ export default function CutCreate() {
         }
 
         const processedFile = await processImage(file);
-        formData.append("photos", processedFile, processedFile.name);
+
+        // 🔹 Reforzamos tipo MIME válido
+        const safeFile =
+          processedFile.type &&
+          processedFile.type !== "application/octet-stream"
+            ? processedFile
+            : new File([processedFile], processedFile.name, {
+                type: "image/webp",
+              });
+
+        // 🔹 Safari necesita filename explícito
+        formData.append("photos", safeFile, safeFile.name);
 
         fileSummaries.push(
-          `${processedFile.name} (${(processedFile.size / 1024).toFixed(1)} KB)`
+          `${safeFile.name} (${(safeFile.size / 1024).toFixed(1)} KB)`
         );
       }
 
