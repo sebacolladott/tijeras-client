@@ -56,6 +56,7 @@ export default function CutCreate() {
   }, []);
 
   // ---------- Enviar datos ----------
+  // ---------- Enviar datos ----------
   const onSubmit = async (data) => {
     const formData = new FormData();
     formData.append("clientId", id);
@@ -65,18 +66,35 @@ export default function CutCreate() {
 
     const files = fileInputRef.current?.files;
     if (files && files.length > 0) {
+      const convertedFiles = [];
+
       for (const file of files) {
         if (file.size > 25 * 1024 * 1024) {
           toast.warning(`"${file.name}" es muy grande (>25MB), se omitirá`);
           continue;
         }
-        formData.append("photos", file, file.name);
+
+        try {
+          const convertedBlob = await convertToJPG(file);
+          convertedFiles.push(convertedBlob);
+          formData.append(
+            "photos",
+            convertedBlob,
+            `${file.name.split(".")[0]}.jpg`
+          );
+        } catch (error) {
+          console.error(`Error convirtiendo ${file.name}:`, error);
+          toast.error(`No se pudo procesar "${file.name}"`);
+        }
       }
-      toast.info(
-        `📸 ${files.length} archivo${files.length > 1 ? "s" : ""} agregado${
-          files.length > 1 ? "s" : ""
-        }`
-      );
+
+      if (convertedFiles.length > 0) {
+        toast.info(
+          `📸 ${convertedFiles.length} imagen${
+            convertedFiles.length > 1 ? "es" : ""
+          } convertida${convertedFiles.length > 1 ? "s" : ""} a JPG`
+        );
+      }
     }
 
     await toast.promise(axios.post("/cuts", formData), {
@@ -104,6 +122,55 @@ export default function CutCreate() {
     });
 
     navigate(`/clients/${id}`);
+  };
+
+  // ---------- Función para convertir a JPG ----------
+  const convertToJPG = (file, maxWidth = 1920, maxHeight = 1920) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = (e) => {
+        const img = new Image();
+
+        img.onload = () => {
+          let { width, height } = img;
+
+          // Redimensionar si es necesario
+          if (width > maxWidth || height > maxHeight) {
+            const ratio = Math.min(maxWidth / width, maxHeight / height);
+            width = Math.round(width * ratio);
+            height = Math.round(height * ratio);
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "white";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+
+          canvas.toBlob(
+            (blob) => {
+              if (blob) {
+                resolve(blob);
+              } else {
+                reject(new Error("No se pudo convertir la imagen"));
+              }
+            },
+            "image/jpeg",
+            0.9
+          );
+        };
+
+        img.onerror = () => reject(new Error("Error al cargar la imagen"));
+        img.src = e.target.result;
+      };
+
+      reader.onerror = () => reject(new Error("Error al leer el archivo"));
+      reader.readAsDataURL(file);
+    });
   };
 
   return (
@@ -177,7 +244,6 @@ export default function CutCreate() {
                 type="file"
                 accept="image/*,.heic,.heif"
                 multiple
-                capture="environment"
               />
               <FieldDescription>
                 Podés seleccionar varias imágenes (HEIC, JPG, PNG, etc.).
