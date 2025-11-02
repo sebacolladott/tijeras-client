@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/field";
 
 const schema = z.object({
-  barberId: z.string().min(1, "Elegí un barbero"),
+  barberId: z.string().optional(), // no editable acá
   style: z.string().min(1, "Indicá el estilo"),
   notes: z.string().optional(),
   photos: z.any().optional(),
@@ -52,24 +52,28 @@ export default function CutEdit() {
   useEffect(() => {
     return () => {
       const photos = form.watch("photos") || [];
-      photos.forEach(({ preview }) => {
-        if (preview) URL.revokeObjectURL(preview);
+      photos.forEach((file) => {
+        if (file.preview) URL.revokeObjectURL(file.preview);
       });
     };
   }, [form]);
 
   const onSubmit = async (data) => {
     const formData = new FormData();
-    formData.append("barberId", data.barberId);
     formData.append("style", data.style);
     if (data.notes) formData.append("notes", data.notes);
-    for (const { file } of data.photos || []) formData.append("photos", file);
+
+    // ✅ iPhone compatible
+    for (const file of data.photos || []) {
+      formData.append("photos", file);
+    }
 
     await toast.promise(axios.put(`/cuts/${cutId}`, formData), {
       loading: "Actualizando corte...",
       success: "Corte actualizado con éxito",
       error: "Error al actualizar corte",
     });
+
     navigate(`/clients/${id}`);
   };
 
@@ -79,57 +83,53 @@ export default function CutEdit() {
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <FieldSet>
           <FieldLegend>Editar corte</FieldLegend>
-          <FieldDescription>
-            Modificá los datos del corte.
-          </FieldDescription>
+          <FieldDescription>Modificá los datos del corte.</FieldDescription>
 
           <FieldGroup className="space-y-6 mt-4">
-        <Field>
-          <FieldLabel>Estilo *</FieldLabel>
-          <Textarea
-            {...form.register("style")}
-            placeholder="Ejemplo: Fade medio con navaja"
-          />
-          <FieldDescription>
-            Modificá el tipo o estilo del corte realizado.
-          </FieldDescription>
-          <FieldError>{form.formState.errors.style?.message}</FieldError>
-        </Field>
+            {/* Estilo */}
+            <Field>
+              <FieldLabel>Estilo *</FieldLabel>
+              <Textarea
+                {...form.register("style")}
+                placeholder="Ejemplo: Fade medio con navaja"
+              />
+              <FieldDescription>
+                Modificá el tipo o estilo del corte realizado.
+              </FieldDescription>
+              <FieldError>{form.formState.errors.style?.message}</FieldError>
+            </Field>
 
-        <Field>
-          <FieldLabel>Notas</FieldLabel>
-          <Input
-            {...form.register("notes")}
-            rows={4}
-            placeholder="Ejemplo: Cliente pidió mantener el largo en la parte superior"
-          />
-          <FieldDescription>
-            Agregá observaciones o detalles relevantes sobre el corte.
-          </FieldDescription>
-          <FieldError>{form.formState.errors.notes?.message}</FieldError>
-        </Field>
+            {/* Notas */}
+            <Field>
+              <FieldLabel>Notas</FieldLabel>
+              <Input
+                {...form.register("notes")}
+                placeholder="Ejemplo: Cliente pidió mantener el largo en la parte superior"
+              />
+              <FieldDescription>
+                Agregá observaciones o detalles relevantes sobre el corte.
+              </FieldDescription>
+              <FieldError>{form.formState.errors.notes?.message}</FieldError>
+            </Field>
 
-        <Field>
-          <FieldLabel>Fotos</FieldLabel>
-          <Input
-            type="file"
-            accept="image/jpeg,image/jpg,image/png,image/heic"
-            multiple
-            onChange={(e) => {
-              const files = Array.from(e.target.files || []).map((f) => ({
-                file: f,
-                preview: URL.createObjectURL(f),
-              }));
-              form.setValue("photos", files);
-            }}
-          />
-          {form.watch("photos")?.length > 0 && (
-            <FieldDescription>
-              {form.watch("photos").length} foto(s) seleccionada(s)
-            </FieldDescription>
-          )}
-        </Field>
-
+            {/* Fotos */}
+            <Field>
+              <FieldLabel>Fotos</FieldLabel>
+              <Input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  form.setValue("photos", files);
+                }}
+              />
+              {form.watch("photos")?.length > 0 && (
+                <FieldDescription>
+                  {form.watch("photos").length} foto(s) seleccionada(s)
+                </FieldDescription>
+              )}
+            </Field>
           </FieldGroup>
         </FieldSet>
 
