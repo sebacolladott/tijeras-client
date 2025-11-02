@@ -1,9 +1,8 @@
-import { useEffect } from "react";
-import { useParams, useNavigate } from "react-router";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
+import { useNavigate } from "react-router";
 import axios from "@/lib/axios";
 
 import { Button } from "@/components/ui/button";
@@ -11,9 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Field,
-  FieldLabel,
-  FieldError,
   FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
 } from "@/components/ui/field";
 
 const schema = z.object({
@@ -21,61 +23,67 @@ const schema = z.object({
   bio: z.string().optional(),
 });
 
-export default function BarberEdit() {
-  const { id } = useParams();
+export default function BarberCreate() {
   const navigate = useNavigate();
-  const form = useForm({
+  const { control, handleSubmit, formState } = useForm({
     resolver: zodResolver(schema),
     defaultValues: { name: "", bio: "" },
   });
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await axios.get(`/barbers/${id}`);
-        form.reset(res.data);
-      } catch {
-        toast.error("Error al cargar barbero");
-        navigate("/barbers");
-      }
-    })();
-  }, [id, form, navigate]);
-
   const onSubmit = async (data) => {
-    await toast.promise(axios.put(`/barbers/${id}`, data), {
-      loading: "Guardando cambios...",
-      success: "Barbero actualizado con éxito",
-      error: "Error al actualizar barbero",
+    await toast.promise(axios.post("/barbers", data), {
+      loading: "Creando barbero...",
+      success: "Barbero creado con éxito",
+      error: "Error al crear barbero",
     });
     navigate("/barbers");
   };
 
   return (
     <div className="space-y-8 max-w-md">
-      <h3 className="font-semibold text-lg">Editar barbero</h3>
-
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        <Field>
-          <FieldLabel>Nombre *</FieldLabel>
-          <Input {...form.register("name")} placeholder="Ejemplo: Juan Pérez" />
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+        <FieldSet>
+          <FieldLegend>Nuevo barbero</FieldLegend>
           <FieldDescription>
-            Modificá el nombre completo del barbero.
+            Completá los datos para registrar un nuevo barbero en el sistema.
           </FieldDescription>
-          <FieldError>{form.formState.errors.name?.message}</FieldError>
-        </Field>
 
-        <Field>
-          <FieldLabel>Biografía</FieldLabel>
-          <Textarea
-            {...form.register("bio")}
-            placeholder="Ejemplo: Especialista en cortes fade y barbas. Más de 5 años de experiencia."
-            rows={4}
-          />
-          <FieldDescription>
-            Actualizá la descripción o especialidades del barbero.
-          </FieldDescription>
-          <FieldError>{form.formState.errors.bio?.message}</FieldError>
-        </Field>
+          <FieldGroup className="space-y-6 mt-4">
+            <Field>
+              <FieldLabel>Nombre *</FieldLabel>
+              <Controller
+                name="name"
+                control={control}
+                render={({ field }) => (
+                  <Input {...field} placeholder="Juan Pérez" />
+                )}
+              />
+              <FieldDescription>
+                Escribí el nombre completo del barbero.
+              </FieldDescription>
+              <FieldError>{formState.errors.name?.message}</FieldError>
+            </Field>
+
+            <Field>
+              <FieldLabel>Biografía</FieldLabel>
+              <Controller
+                name="bio"
+                control={control}
+                render={({ field }) => (
+                  <Textarea
+                    {...field}
+                    placeholder="Especialista en cortes fade y barbas. Más de 5 años de experiencia en el rubro."
+                    rows={4}
+                  />
+                )}
+              />
+              <FieldDescription>
+                Incluí una breve descripción sobre su experiencia o estilo.
+              </FieldDescription>
+              <FieldError>{formState.errors.bio?.message}</FieldError>
+            </Field>
+          </FieldGroup>
+        </FieldSet>
 
         <div className="flex gap-2 pt-2">
           <Button type="submit" className="w-28">
