@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
+import { useNavigate, useParams } from "react-router";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import axios from "@/lib/axios";
 
@@ -31,7 +31,6 @@ const schema = z.object({
   barberId: z.string().min(1, "Elegí un barbero"),
   style: z.string().min(1, "Indicá el estilo"),
   notes: z.string().optional(),
-  photos: z.any().optional(),
 });
 
 export default function CutCreate() {
@@ -39,6 +38,7 @@ export default function CutCreate() {
   const navigate = useNavigate();
   const form = useForm({ resolver: zodResolver(schema) });
   const [barbers, setBarbers] = useState([]);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     (async () => {
@@ -51,15 +51,6 @@ export default function CutCreate() {
     })();
   }, []);
 
-  useEffect(() => {
-    return () => {
-      const photos = form.watch("photos") || [];
-      photos.forEach((file) => {
-        if (file.preview) URL.revokeObjectURL(file.preview);
-      });
-    };
-  }, [form]);
-
   const onSubmit = async (data) => {
     const formData = new FormData();
     formData.append("clientId", id);
@@ -67,9 +58,12 @@ export default function CutCreate() {
     formData.append("style", data.style);
     if (data.notes) formData.append("notes", data.notes);
 
-    // ✅ Safari/iPhone compatible
-    for (const file of data.photos || []) {
-      formData.append("photos", file);
+    // ✅ Tomamos archivos desde el ref
+    const files = fileInputRef.current?.files;
+    if (files && files.length > 0) {
+      for (const file of files) {
+        formData.append("photos", file);
+      }
     }
 
     await toast.promise(axios.post("/cuts", formData), {
@@ -84,6 +78,7 @@ export default function CutCreate() {
   return (
     <div className="space-y-8 max-w-md">
       <BackButton fallback={`/clients/${id}`} />
+
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
         <FieldSet>
           <FieldLegend>Nuevo corte</FieldLegend>
@@ -110,9 +105,6 @@ export default function CutCreate() {
                   ))}
                 </SelectContent>
               </Select>
-              <FieldDescription>
-                Elegí el barbero que realizó el corte.
-              </FieldDescription>
               <FieldError>{form.formState.errors.barberId?.message}</FieldError>
             </Field>
 
@@ -123,9 +115,6 @@ export default function CutCreate() {
                 {...form.register("style")}
                 placeholder="Ejemplo: Fade medio con navaja"
               />
-              <FieldDescription>
-                Especificá el tipo o estilo del corte realizado.
-              </FieldDescription>
               <FieldError>{form.formState.errors.style?.message}</FieldError>
             </Field>
 
@@ -136,29 +125,16 @@ export default function CutCreate() {
                 {...form.register("notes")}
                 placeholder="Ejemplo: Prefiere estilo clásico o detalles adicionales"
               />
-              <FieldDescription>
-                Agregá observaciones relevantes sobre el corte.
-              </FieldDescription>
               <FieldError>{form.formState.errors.notes?.message}</FieldError>
             </Field>
 
             {/* Fotos */}
             <Field>
               <FieldLabel>Fotos</FieldLabel>
-              <Input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={(e) => {
-                  const files = Array.from(e.target.files || []);
-                  form.setValue("photos", files);
-                }}
-              />
-              {form.watch("photos")?.length > 0 && (
-                <FieldDescription>
-                  {form.watch("photos").length} foto(s) seleccionada(s)
-                </FieldDescription>
-              )}
+              <Input ref={fileInputRef} type="file" accept="image/*" multiple />
+              <FieldDescription>
+                Podés seleccionar varias imágenes (HEIC, JPG, PNG).
+              </FieldDescription>
             </Field>
           </FieldGroup>
         </FieldSet>
