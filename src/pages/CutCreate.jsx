@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import axios from "@/lib/axios";
 import heic2any from "heic2any";
+import imageCompression from "browser-image-compression";
 
 import { Button } from "@/components/ui/button";
 import BackButton from "@/components/BackButton";
@@ -38,48 +39,78 @@ const schema = z.object({
   notes: z.string().optional(),
 });
 
-// ---------- Conversión a WebP (con fallback para Safari) ----------
-async function convertToWebP(blob) {
+// ---------- Compresión y conversión ----------
+async function processImage(file) {
   try {
-    const bitmap = await createImageBitmap(blob);
-    const canvas = document.createElement("canvas");
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(bitmap, 0, 0);
-    return new Promise((resolve) =>
-      canvas.toBlob((b) => resolve(b), "image/webp", 0.9)
-    );
-  } catch {
-    // Fallback para navegadores sin createImageBitmap (ej: Safari iOS)
-    const img = document.createElement("img");
-    const url = URL.createObjectURL(blob);
-    await new Promise((r) => {
-      img.onload = r;
-      img.src = url;
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = img.width;
-    canvas.height = img.height;
-    const ctx = canvas.getContext("2d");
-    ctx.drawImage(img, 0, 0);
-    return new Promise((resolve) =>
-      canvas.toBlob(
-        (b) => {
-          URL.revokeObjectURL(url);
-          resolve(b);
-        },
-        "image/webp",
-        0.9
-      )
-    );
+    let image = file;
+
+    // HEIC → JPEG
+    if (
+      file.type === "image/heic" ||
+      file.type === "image/heif" ||
+      file.name.endsWith(".heic") ||
+      file.name.endsWith(".heif")
+    ) {
+      try {
+        image = await heic2any({ blob: file, toType: "image/jpeg" });
+      } catch (err) {
+        console.warn("Error convirtiendo HEIC:", err);
+        toast.warning(`No se pudo convertir ${file.name} (HEIC)`);
+      }
+    }
+
+    // ✅ intentar compresión normal
+    try {
+      const compressed = await imageCompression(image, {
+        maxSizeMB: 1,
+        maxWidthOrHeight: 1920,
+        useWebWorker: true,
+        fileType: "image/webp",
+      });
+
+      return new File([compressed], file.name.replace(/\.[^.]+$/, ".webp"), {
+        type: "image/webp",
+      });
+    } catch (err) {
+      // 🔁 fallback si falla el worker
+      console.warn("Fallback a compresión básica:", err);
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(image);
+      await new Promise((r) => (img.onload = r));
+      const canvas = document.createElement("canvas");
+      const ratio = Math.min(1920 / img.width, 1920 / img.height, 1);
+      canvas.width = img.width * ratio;
+      canvas.height = img.height * ratio;
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(img.src);
+
+      return new Promise((resolve) =>
+        canvas.toBlob(
+          (b) =>
+            resolve(
+              new File([b], file.name.replace(/\.[^.]+$/, ".webp"), {
+                type: "image/webp",
+              })
+            ),
+          "image/webp",
+          0.8
+        )
+      );
+    }
+  } catch (err) {
+    console.error("Error procesando imagen:", err);
+    toast.warning(`No se pudo procesar ${file.name}, se enviará original`);
+    return file;
   }
 }
 
 export default function CutCreate() {
   const { id } = useParams(); // clientId
   const navigate = useNavigate();
-  const form = useForm({ resolver: zodResolver(schema) });
+  const form = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: { barberId: "", style: "", notes: "" },
+  });
   const [barbers, setBarbers] = useState([]);
   const fileInputRef = useRef(null);
 
@@ -104,47 +135,21 @@ export default function CutCreate() {
 
     if (files && files.length > 0) {
       for (const file of files) {
-        let imageBlob = file;
-
-        // HEIC → JPEG
-        if (
-          file.type === "image/heic" ||
-          file.type === "image/heif" ||
-          file.name.endsWith(".heic") ||
-          file.name.endsWith(".heif")
-        ) {
-          try {
-            imageBlob = await heic2any({ blob: file, toType: "image/jpeg" });
-          } catch (err) {
-            console.error("Error convirtiendo HEIC/HEIF:", err);
-            toast.warning(`No se pudo convertir ${file.name} (HEIC)`);
-          }
+        if (file.size > 25 * 1024 * 1024) {
+          toast.warning(`"${file.name}" es muy grande (>25MB), se omitirá`);
+          continue;
         }
 
-        // cualquier imagen → WebP
-        try {
-          const webpBlob = await convertToWebP(imageBlob);
-          const webpFile = new File(
-            [webpBlob],
-            file.name.replace(/\.[^.]+$/, ".webp"),
-            { type: "image/webp" }
-          );
-          formData.append("photos", webpFile);
-          fileSummaries.push(
-            `${webpFile.name} (${(webpFile.size / 1024).toFixed(1)} KB)`
-          );
-        } catch (err) {
-          console.error("Error convirtiendo a WebP:", err);
-          toast.warning(
-            `No se pudo convertir ${file.name}, se enviará original`
-          );
-          formData.append("photos", file);
-          fileSummaries.push(`${file.name} (sin conversión)`);
-        }
+        const processedFile = await processImage(file);
+        formData.append("photos", processedFile);
+
+        fileSummaries.push(
+          `${processedFile.name} (${(processedFile.size / 1024).toFixed(1)} KB)`
+        );
       }
 
       toast.info(
-        `📸 ${files.length} archivo${files.length > 1 ? "s" : ""} cargado${
+        `📸 ${files.length} archivo${files.length > 1 ? "s" : ""} procesado${
           files.length > 1 ? "s" : ""
         }:\n${fileSummaries.join("\n")}`
       );
@@ -239,13 +244,13 @@ export default function CutCreate() {
               <Input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,.heic,.heif"
                 multiple
                 capture="environment"
               />
               <FieldDescription>
                 Podés seleccionar varias imágenes (HEIC, JPG, PNG — se
-                convertirán a WebP automáticamente).
+                comprimirán y convertirán a WebP automáticamente).
               </FieldDescription>
             </Field>
           </FieldGroup>
