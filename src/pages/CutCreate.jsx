@@ -5,8 +5,6 @@ import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import axios from "@/lib/axios";
-import heic2any from "heic2any";
-import imageCompression from "browser-image-compression";
 
 import { Button } from "@/components/ui/button";
 import BackButton from "@/components/BackButton";
@@ -39,72 +37,6 @@ const schema = z.object({
   notes: z.string().optional(),
 });
 
-// ---------- Compresión y conversión ----------
-async function processImage(file) {
-  try {
-    let image = file;
-
-    // --- 1. HEIC → JPEG ---
-    if (
-      file.type === "image/heic" ||
-      file.type === "image/heif" ||
-      file.name.endsWith(".heic") ||
-      file.name.endsWith(".heif")
-    ) {
-      try {
-        const converted = await heic2any({ blob: file, toType: "image/jpeg" });
-        // heic2any devuelve un Blob, así que lo forzamos a File
-        image = new File([converted], file.name.replace(/\.[^.]+$/, ".jpg"), {
-          type: "image/jpeg",
-        });
-      } catch (err) {
-        console.warn("Error convirtiendo HEIC:", err);
-        toast.warning(`No se pudo convertir ${file.name} (HEIC)`);
-      }
-    }
-
-    // --- 2. Asegurar que sea File válido ---
-    if (!(image instanceof File)) {
-      image = new File([image], file.name.replace(/\.[^.]+$/, ".jpg"), {
-        type: image.type || "image/jpeg",
-      });
-    }
-
-    // --- 3. Compresión ---
-    const compressedBlob = await imageCompression(image, {
-      maxSizeMB: 1,
-      maxWidthOrHeight: 1920,
-      useWebWorker: true,
-      fileType: "image/webp",
-    });
-
-    // ⚠️ browser-image-compression a veces devuelve Blob sin tipo en iOS
-    const mime =
-      compressedBlob.type && compressedBlob.type !== ""
-        ? compressedBlob.type
-        : "image/webp";
-
-    // --- 4. Reconvertir a File con tipo y nombre fijos ---
-    const finalFile = new File(
-      [compressedBlob],
-      file.name.replace(/\.[^.]+$/, ".webp"),
-      { type: mime }
-    );
-
-    console.log("✅ Archivo final:", {
-      name: finalFile.name,
-      type: finalFile.type,
-      size: finalFile.size,
-    });
-
-    return finalFile;
-  } catch (err) {
-    console.error("Error procesando imagen:", err);
-    toast.warning(`No se pudo procesar ${file.name}, se enviará original`);
-    return file;
-  }
-}
-
 export default function CutCreate() {
   const { id } = useParams(); // clientId
   const navigate = useNavigate();
@@ -132,38 +64,18 @@ export default function CutCreate() {
     if (data.notes) formData.append("notes", data.notes);
 
     const files = fileInputRef.current?.files;
-    const fileSummaries = [];
-
     if (files && files.length > 0) {
       for (const file of files) {
         if (file.size > 25 * 1024 * 1024) {
           toast.warning(`"${file.name}" es muy grande (>25MB), se omitirá`);
           continue;
         }
-
-        const processedFile = await processImage(file);
-
-        // 🔹 Reforzamos tipo MIME válido
-        const safeFile =
-          processedFile.type &&
-          processedFile.type !== "application/octet-stream"
-            ? processedFile
-            : new File([processedFile], processedFile.name, {
-                type: "image/webp",
-              });
-
-        // 🔹 Safari necesita filename explícito
-        formData.append("photos", safeFile, safeFile.name);
-
-        fileSummaries.push(
-          `${safeFile.name} (${(safeFile.size / 1024).toFixed(1)} KB)`
-        );
+        formData.append("photos", file, file.name);
       }
-
       toast.info(
-        `📸 ${files.length} archivo${files.length > 1 ? "s" : ""} procesado${
+        `📸 ${files.length} archivo${files.length > 1 ? "s" : ""} agregado${
           files.length > 1 ? "s" : ""
-        }:\n${fileSummaries.join("\n")}`
+        }`
       );
     }
 
@@ -171,14 +83,21 @@ export default function CutCreate() {
       loading: "Creando corte...",
       success: "Corte creado con éxito",
       error: (err) => {
+        console.error("❌ Error completo:", err);
+
         if (err.response) {
+          console.error("📨 Respuesta del servidor:", err.response.data);
+          console.error("📋 Status:", err.response.status);
+          console.error("🔗 Headers:", err.response.headers);
           return (
             err.response.data?.error ||
             `Error ${err.response.status}: ${JSON.stringify(err.response.data)}`
           );
         } else if (err.request) {
+          console.error("📡 No hubo respuesta del servidor:", err.request);
           return "El servidor no respondió";
         } else {
+          console.error("⚠️ Error al configurar la solicitud:", err.message);
           return `Error: ${err.message}`;
         }
       },
@@ -261,8 +180,7 @@ export default function CutCreate() {
                 capture="environment"
               />
               <FieldDescription>
-                Podés seleccionar varias imágenes (HEIC, JPG, PNG — se
-                comprimirán y convertirán a WebP automáticamente).
+                Podés seleccionar varias imágenes (HEIC, JPG, PNG, etc.).
               </FieldDescription>
             </Field>
           </FieldGroup>
