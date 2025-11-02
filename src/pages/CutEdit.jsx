@@ -48,25 +48,59 @@ export default function CutEdit() {
   }, [cutId, form, navigate, id]);
 
   const onSubmit = async (data) => {
-    const formData = new FormData();
-    formData.append("style", data.style);
-    if (data.notes) formData.append("notes", data.notes);
+    try {
+      const formData = new FormData();
+      formData.append("style", data.style);
+      if (data.notes) formData.append("notes", data.notes);
 
-    // ✅ Usamos ref en lugar de form.watch()
-    const files = fileInputRef.current?.files;
-    if (files && files.length > 0) {
-      for (const file of files) {
-        formData.append("photos", file);
+      const files = fileInputRef.current?.files;
+      if (files && files.length > 0) {
+        for (const file of files) {
+          let toSend = file;
+
+          // ✅ Conversión HEIC → JPEG si viene de iPhone
+          if (file.type === "image/heic" || file.name.endsWith(".heic")) {
+            const blob = await fetch(URL.createObjectURL(file)).then((r) =>
+              r.blob()
+            );
+            const imageBitmap = await createImageBitmap(blob);
+            const canvas = document.createElement("canvas");
+            canvas.width = imageBitmap.width;
+            canvas.height = imageBitmap.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(imageBitmap, 0, 0);
+            const convertedBlob = await new Promise((res) =>
+              canvas.toBlob(res, "image/jpeg", 0.9)
+            );
+            toSend = new File(
+              [convertedBlob],
+              file.name.replace(/\.heic$/i, ".jpg"),
+              {
+                type: "image/jpeg",
+              }
+            );
+          }
+
+          formData.append("photos", toSend);
+        }
       }
+
+      await toast.promise(
+        axios.put(`/cuts/${cutId}`, formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        }),
+        {
+          loading: "Actualizando corte...",
+          success: "Corte actualizado con éxito",
+          error: "Error al actualizar corte",
+        }
+      );
+
+      navigate(`/clients/${id}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Error inesperado al actualizar el corte");
     }
-
-    await toast.promise(axios.put(`/cuts/${cutId}`, formData), {
-      loading: "Actualizando corte...",
-      success: "Corte actualizado con éxito",
-      error: "Error al actualizar corte",
-    });
-
-    navigate(`/clients/${id}`);
   };
 
   return (
@@ -102,10 +136,15 @@ export default function CutEdit() {
             {/* Fotos */}
             <Field>
               <FieldLabel>Fotos</FieldLabel>
-              <Input ref={fileInputRef} type="file" accept="image/*" multiple />
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.heic,.heif"
+                multiple
+                capture="environment"
+              />
               <FieldDescription>
-                Podés seleccionar varias imágenes nuevas para reemplazar o
-                agregar.
+                Podés seleccionar varias imágenes nuevas (HEIC, JPG, PNG).
               </FieldDescription>
             </Field>
           </FieldGroup>

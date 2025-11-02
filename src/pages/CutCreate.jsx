@@ -52,27 +52,62 @@ export default function CutCreate() {
   }, []);
 
   const onSubmit = async (data) => {
-    const formData = new FormData();
-    formData.append("clientId", id);
-    formData.append("barberId", data.barberId);
-    formData.append("style", data.style);
-    if (data.notes) formData.append("notes", data.notes);
+    try {
+      const formData = new FormData();
+      formData.append("clientId", id);
+      formData.append("barberId", data.barberId);
+      formData.append("style", data.style);
+      if (data.notes) formData.append("notes", data.notes);
 
-    // ✅ Tomamos archivos desde el ref
-    const files = fileInputRef.current?.files;
-    if (files && files.length > 0) {
-      for (const file of files) {
-        formData.append("photos", file);
+      // ✅ Manejo de archivos compatible con iOS
+      const files = fileInputRef.current?.files;
+      if (files && files.length > 0) {
+        for (const file of files) {
+          let toSend = file;
+
+          // Conversión HEIC → JPEG si hace falta
+          if (file.type === "image/heic" || file.name.endsWith(".heic")) {
+            const blob = await fetch(URL.createObjectURL(file)).then((r) =>
+              r.blob()
+            );
+            const imageBitmap = await createImageBitmap(blob);
+            const canvas = document.createElement("canvas");
+            canvas.width = imageBitmap.width;
+            canvas.height = imageBitmap.height;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(imageBitmap, 0, 0);
+            const convertedBlob = await new Promise((res) =>
+              canvas.toBlob(res, "image/jpeg", 0.9)
+            );
+            toSend = new File(
+              [convertedBlob],
+              file.name.replace(/\.heic$/i, ".jpg"),
+              {
+                type: "image/jpeg",
+              }
+            );
+          }
+
+          formData.append("photos", toSend);
+        }
       }
+
+      await toast.promise(
+        axios.post("/cuts", formData, {
+          headers: { "Content-Type": "multipart/form-data" },
+        }),
+        {
+          loading: "Subiendo fotos...",
+          success: "Corte creado con éxito",
+          error: "Error al crear corte",
+        }
+      );
+
+      navigate(`/clients/${id}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Error inesperado al subir fotos");
     }
-
-    await toast.promise(axios.post("/cuts", formData), {
-      loading: "Creando corte...",
-      success: "Corte creado con éxito",
-      error: "Error al crear corte",
-    });
-
-    navigate(`/clients/${id}`);
   };
 
   return (
@@ -131,7 +166,13 @@ export default function CutCreate() {
             {/* Fotos */}
             <Field>
               <FieldLabel>Fotos</FieldLabel>
-              <Input ref={fileInputRef} type="file" accept="image/*" multiple />
+              <Input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*,.heic,.heif"
+                multiple
+                capture="environment"
+              />
               <FieldDescription>
                 Podés seleccionar varias imágenes (HEIC, JPG, PNG).
               </FieldDescription>
