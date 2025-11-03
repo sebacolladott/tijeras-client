@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import axios from "@/lib/axios";
 import heic2any from "heic2any";
+import imageCompression from "browser-image-compression";
 
 import { Button } from "@/components/ui/button";
 import BackButton from "@/components/BackButton";
@@ -37,7 +38,7 @@ const schema = z.object({
 });
 
 export default function CutCreate() {
-  const { id } = useParams(); // clientId
+  const { id } = useParams();
   const navigate = useNavigate();
   const form = useForm({
     resolver: zodResolver(schema),
@@ -53,61 +54,7 @@ export default function CutCreate() {
       .catch(() => toast.error("Error al cargar barberos"));
   }, []);
 
-  // ---------- Conversión universal ----------
-  const convertToWebP = (
-    file,
-    maxWidth = 1280,
-    maxHeight = 1280,
-    quality = 0.55
-  ) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          let { width, height } = img;
-          if (width > maxWidth || height > maxHeight) {
-            const ratio = Math.min(maxWidth / width, maxHeight / height);
-            width = Math.round(width * ratio);
-            height = Math.round(height * ratio);
-          }
-
-          const canvas = document.createElement("canvas");
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx.fillStyle = "white";
-          ctx.fillRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
-
-          const mime =
-            canvas.toDataURL("image/webp").indexOf("data:image/webp") === 0
-              ? "image/webp"
-              : "image/jpeg";
-
-          canvas.toBlob(
-            (blob) => {
-              if (!blob)
-                return reject(new Error("No se pudo convertir la imagen"));
-              if (blob.size > 500 * 1024 && quality > 0.3) {
-                resolve(
-                  convertToWebP(file, maxWidth, maxHeight, quality - 0.1)
-                );
-              } else resolve(blob);
-            },
-            mime,
-            quality
-          );
-        };
-        img.onerror = () => reject(new Error("Error al cargar la imagen"));
-        img.src = e.target.result;
-      };
-      reader.onerror = () => reject(new Error("Error al leer el archivo"));
-      reader.readAsDataURL(file);
-    });
-  };
-
-  // ---------- Normaliza HEIC / iOS ----------
+  // ---------- Normaliza HEIC ----------
   async function normalizeFile(file) {
     if (
       file.type === "image/heic" ||
@@ -124,6 +71,22 @@ export default function CutCreate() {
       }
     }
     return file;
+  }
+
+  // ---------- Compresión ----------
+  async function compressImage(file) {
+    const options = {
+      maxSizeMB: 0.6, // cada imagen ≈ 600 KB
+      maxWidthOrHeight: 1280,
+      useWebWorker: true,
+      fileType: "image/webp",
+    };
+    try {
+      return await imageCompression(file, options);
+    } catch (err) {
+      console.error("Error al comprimir:", err);
+      return file;
+    }
   }
 
   // ---------- Envío ----------
@@ -148,16 +111,20 @@ export default function CutCreate() {
       for (const file of files) {
         try {
           const normalized = await normalizeFile(file);
-          const webp = await convertToWebP(normalized);
-          totalSize += webp.size;
+          const compressed = await compressImage(normalized);
+          totalSize += compressed.size;
 
           if (totalSize > 5 * 1024 * 1024) {
             toast.error("⚠️ Superás el límite total de 5 MB");
             break;
           }
 
-          formData.append("photos", webp, `${file.name.split(".")[0]}.webp`);
-          processed.push(webp);
+          formData.append(
+            "photos",
+            compressed,
+            `${file.name.split(".")[0]}.webp`
+          );
+          processed.push(compressed);
         } catch (err) {
           console.error("❌ Error procesando imagen:", file.name, err);
           toast.error(`No se pudo procesar "${file.name}"`);
@@ -252,7 +219,7 @@ export default function CutCreate() {
                 }}
               />
               <FieldDescription>
-                Hasta 3 imágenes (HEIC, JPG, PNG).
+                Hasta 3 imágenes (HEIC, JPG, PNG, WebP).
               </FieldDescription>
             </Field>
           </FieldGroup>
