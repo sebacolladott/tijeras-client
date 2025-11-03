@@ -80,7 +80,6 @@ export default function CutCreate() {
           ctx.fillRect(0, 0, width, height);
           ctx.drawImage(img, 0, 0, width, height);
 
-          // Safari viejo no soporta image/webp → usar image/jpeg
           const mime =
             canvas.toDataURL("image/webp").indexOf("data:image/webp") === 0
               ? "image/webp"
@@ -139,6 +138,11 @@ export default function CutCreate() {
     let totalSize = 0;
 
     if (files && files.length > 0) {
+      if (files.length > 3) {
+        toast.error("Solo podés subir hasta 3 fotos");
+        return;
+      }
+
       const processed = [];
 
       for (const file of files) {
@@ -146,10 +150,12 @@ export default function CutCreate() {
           const normalized = await normalizeFile(file);
           const webp = await convertToWebP(normalized);
           totalSize += webp.size;
+
           if (totalSize > 5 * 1024 * 1024) {
             toast.error("⚠️ Superás el límite total de 5 MB");
             break;
           }
+
           formData.append("photos", webp, `${file.name.split(".")[0]}.webp`);
           processed.push(webp);
         } catch (err) {
@@ -238,9 +244,15 @@ export default function CutCreate() {
                 type="file"
                 accept="image/*,.heic,.heif"
                 multiple
+                onChange={(e) => {
+                  if (e.target.files.length > 3) {
+                    toast.error("Solo podés subir hasta 3 fotos");
+                    e.target.value = "";
+                  }
+                }}
               />
               <FieldDescription>
-                Seleccioná varias imágenes (HEIC, JPG, PNG).
+                Hasta 3 imágenes (HEIC, JPG, PNG).
               </FieldDescription>
             </Field>
           </FieldGroup>
