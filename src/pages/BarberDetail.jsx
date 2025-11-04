@@ -84,7 +84,7 @@ export default function BarberDetail() {
   };
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-5 flex flex-col min-h-0">
       {/* Header */}
       <div className="flex justify-between items-center">
         <BackButton fallback="/barbers" />
@@ -115,65 +115,68 @@ export default function BarberDetail() {
       </div>
 
       {/* Lista de cortes */}
-      <div className="p-4 border rounded-lg">
+      <div className="relative flex-1 min-h-0 overflow-hidden p-4 border rounded-lg flex flex-col">
         <div className="flex items-center gap-2 mb-3">
           <ScissorsIcon className="w-4 h-4 text-muted-foreground" />
           <h4 className="font-medium text-sm">Cortes realizados</h4>
         </div>
 
-        {cuts.length ? (
-          <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
-            {cuts.map((cut) => (
-              <div
-                key={cut.id}
-                className="hover:bg-muted/50 p-3 border rounded-md text-sm transition"
-              >
-                <p className="font-medium">
-                  {cut.client?.name || "Sin cliente"}
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  {cut.style || "Sin estilo"}
-                </p>
-                <p className="mt-1 text-muted-foreground text-xs">
-                  {formatCutDate(cut, {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  }) || "Sin fecha"}
-                </p>
+        <div className="flex-1 min-h-0 overflow-auto">
+          {cuts.length ? (
+            <div className="gap-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+              {cuts.map((cut) => (
+                <div
+                  key={cut.id}
+                  className="hover:bg-muted/50 p-3 border rounded-md text-sm transition"
+                >
+                  <p className="font-medium">
+                    {cut.client?.name || "Sin cliente"}
+                  </p>
+                  <p className="text-muted-foreground text-xs">
+                    {cut.style || "Sin estilo"}
+                  </p>
+                  <p className="mt-1 text-muted-foreground text-xs">
+                    {formatCutDate(cut, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    }) || "Sin fecha"}
+                  </p>
 
-                <div className="flex justify-between mt-2 text-muted-foreground text-xs">
-                  <div className="flex items-center gap-1">
-                    <CameraIcon className="w-3 h-3" />
-                    <span>{cut.photos?.length || 0}</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={() => navigate(`/history/${cut.id}`)}
-                      title="Ver detalle"
-                    >
-                      <EyeIcon className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={() => handleDeleteCut(cut.id)}
-                      title="Eliminar corte"
-                    >
-                      <Trash2Icon className="w-4 h-4 text-destructive" />
-                    </Button>
+                  <div className="flex justify-between mt-2 text-muted-foreground text-xs">
+                    <div className="flex items-center gap-1">
+                      <CameraIcon className="w-3 h-3" />
+                      <span>{cut.photos?.length || 0}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => navigate(`/history/${cut.id}`)}
+                        title="Ver detalle"
+                      >
+                        <EyeIcon className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => handleDeleteCut(cut.id)}
+                        title="Eliminar corte"
+                      >
+                        <Trash2Icon className="w-4 h-4 text-destructive" />
+                      </Button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className="text-muted-foreground text-sm italic">
-            Sin cortes registrados.
-          </p>
-        )}
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm italic">
+              Sin cortes registrados.
+            </p>
+          )}
+        </div>
       </div>
     </section>
   );
 }
+

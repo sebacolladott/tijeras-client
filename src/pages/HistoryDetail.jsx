@@ -84,7 +84,7 @@ export default function HistoryDetail() {
   };
 
   return (
-    <section className="space-y-5">
+    <section className="space-y-5 flex flex-col min-h-0">
       {/* Header */}
       <div className="flex justify-between items-center">
         <BackButton fallback="/history" />
@@ -160,44 +160,46 @@ export default function HistoryDetail() {
       </div>
 
       {/* Fotos */}
-      <div className="p-4 border rounded-lg">
+      <div className="relative flex-1 min-h-0 overflow-hidden p-4 border rounded-lg flex flex-col">
         <div className="flex items-center gap-2 mb-3">
           <CameraIcon className="w-4 h-4 text-muted-foreground" />
           <h4 className="font-medium text-sm">Fotos</h4>
         </div>
 
-        {data.photos?.length ? (
-          <PhotoProvider>
-            <div className="gap-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
-              {data.photos.map((photo) => {
-                const url = `${API}/cuts/${data.id}/photos/${photo.id}/data`;
-                return (
-                  <div key={photo.id} className="group relative">
-                    <PhotoView src={url}>
-                      <img
-                        src={url}
-                        className="group-hover:opacity-90 border rounded-md w-full object-cover aspect-square transition cursor-pointer"
-                        alt="Foto del corte"
-                      />
-                    </PhotoView>
+        <div className="flex-1 min-h-0 overflow-auto">
+          {data.photos?.length ? (
+            <PhotoProvider>
+              <div className="gap-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
+                {data.photos.map((photo) => {
+                  const url = `${API}/cuts/${data.id}/photos/${photo.id}/data`;
+                  return (
+                    <div key={photo.id} className="group relative">
+                      <PhotoView src={url}>
+                        <img
+                          src={url}
+                          className="group-hover:opacity-90 border rounded-md w-full object-cover aspect-square transition cursor-pointer"
+                          alt="Foto del corte"
+                        />
+                      </PhotoView>
 
-                    <Button
-                      size="icon"
-                      variant="destructive"
-                      className="top-1 right-1 absolute opacity-90 w-6 h-6"
-                      onClick={() => removePhoto(photo.id)}
-                      title="Eliminar"
-                    >
-                      <Trash2Icon className="w-3 h-3" />
-                    </Button>
-                  </div>
-                );
-              })}
-            </div>
-          </PhotoProvider>
-        ) : (
-          <p className="text-muted-foreground text-sm italic">Sin fotos</p>
-        )}
+                      <Button
+                        size="icon"
+                        variant="destructive"
+                        className="top-1 right-1 absolute opacity-90 w-6 h-6"
+                        onClick={() => removePhoto(photo.id)}
+                        title="Eliminar"
+                      >
+                        <Trash2Icon className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </PhotoProvider>
+          ) : (
+            <p className="text-muted-foreground text-sm italic">Sin fotos</p>
+          )}
+        </div>
       </div>
     </section>
   );

@@ -5,7 +5,12 @@ import { ArrowLeftIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-export default function BackButton({ fallback = "/", children, className, ...props }) {
+export default function BackButton({
+  fallback = "/",
+  children,
+  className,
+  ...props
+}) {
   const navigate = useNavigate();
 
   const handleBack = useCallback(() => {
@@ -27,12 +32,11 @@ export default function BackButton({ fallback = "/", children, className, ...pro
       size="sm"
       onClick={handleBack}
       className={cn("gap-1", className)}
-      aria-label="Volver"
+      aria-label=""
       {...props}
     >
       <ArrowLeftIcon className="w-4 h-4" />
-      {children || "Volver"}
+      {children || ""}
     </Button>
   );
 }
-

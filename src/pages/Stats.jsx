@@ -59,26 +59,7 @@ export default function Stats() {
     fetchStats();
   }, [fetchStats]);
 
-  if (loading)
-    return (
-      <div className="gap-4 grid md:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="w-full h-40" />
-        ))}
-      </div>
-    );
-
-  if (error)
-    return (
-      <div className="space-y-4">
-        <p className="text-destructive">{error}</p>
-        <Button variant="outline" onClick={fetchStats}>Reintentar</Button>
-      </div>
-    );
-
-  if (!stats) return <p>Error al cargar estadísticas.</p>;
-
-  const { totals, ranking, activity } = stats;
+  const { totals, ranking, activity } = stats || {};
 
   const byBarberData = [...(Array.isArray(ranking?.byBarber) ? ranking.byBarber : [])]
     .sort((a, b) => (b.totalCuts || 0) - (a.totalCuts || 0))
@@ -116,9 +97,14 @@ export default function Stats() {
   };
 
   return (
-    <div className="space-y-6">
+    <>
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <h3 className="font-semibold text-lg">Estadísticas</h3>
+      </div>
+
       {/* Filtros */}
-      <div className="flex flex-wrap justify-between items-center gap-3">
+      <div className="flex flex-wrap justify-between items-center gap-3 mt-4">
         <div className="flex items-center gap-2">
           <Select value={range} onValueChange={setRange}>
             <SelectTrigger className="w-[160px]"><SelectValue placeholder="Rango" /></SelectTrigger>
@@ -130,239 +116,295 @@ export default function Stats() {
             </SelectContent>
           </Select>
         </div>
+
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={fetchStats}>Actualizar</Button>
         </div>
       </div>
 
-      {/* Totales */}
-      <div className="gap-4 grid grid-cols-2 md:grid-cols-4">
-        {Object.entries(totals).map(([key, value]) => (
-          <Card key={key}>
-            <CardHeader>
-              <CardTitle className="capitalize">{key}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="font-bold text-3xl">{value}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Contenido con scroll independiente */}
+      <div className="relative flex-1 overflow-hidden">
+        <div className="w-full h-full overflow-auto">
+          {loading ? (
+            <div className="gap-4 grid md:grid-cols-2 lg:grid-cols-3 mt-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="w-full h-40" />
+              ))}
+            </div>
+          ) : error ? (
+            <div className="space-y-4 mt-6">
+              <p className="text-destructive">{error}</p>
+              <Button variant="outline" onClick={fetchStats}>Reintentar</Button>
+            </div>
+          ) : !stats ? (
+            <p className="mt-6">Error al cargar estadísticas.</p>
+          ) : (
+            <div className="space-y-6 mt-6">
+              {/* Resumen */}
+              <div className="gap-4 grid md:grid-cols-2 lg:grid-cols-3">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Total de cortes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold">{totals?.totalCuts ?? 0}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Total de clientes</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold">{totals?.totalClients ?? 0}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Total de barberos</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-3xl font-bold">{totals?.totalBarbers ?? 0}</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Separator />
+
+              {/* Top barberos */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center gap-2">
+                    <CardTitle>Top barberos</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Select value={topBarbers} onValueChange={setTopBarbers}>
+                        <SelectTrigger className="w-[130px]" size="sm">
+                          <SelectValue placeholder="Top" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5">Top 5</SelectItem>
+                          <SelectItem value="10">Top 10</SelectItem>
+                          <SelectItem value="20">Top 20</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          downloadCsv(
+                            "top-barberos.csv",
+                            ["barber", "totalCuts"],
+                            byBarberData.map((b) => ({
+                              barber: b.barber,
+                              totalCuts: b.totalCuts,
+                            }))
+                          )
+                        }
+                      >
+                        Exportar CSV
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {byBarberData.length ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={byBarberData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="barber" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="totalCuts" fill="#0ea5e9" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">Sin datos.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Top clientes */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center gap-2">
+                    <CardTitle>Top clientes</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Select value={topClients} onValueChange={setTopClients}>
+                        <SelectTrigger className="w-[130px]" size="sm">
+                          <SelectValue placeholder="Top" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5">Top 5</SelectItem>
+                          <SelectItem value="10">Top 10</SelectItem>
+                          <SelectItem value="20">Top 20</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() =>
+                          downloadCsv(
+                            "top-clientes.csv",
+                            ["client", "totalCuts"],
+                            byClientData.map((c) => ({
+                              client: c.client,
+                              totalCuts: c.totalCuts,
+                            }))
+                          )
+                        }
+                      >
+                        Exportar CSV
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {byClientData.length ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={byClientData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="client" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="totalCuts" fill="#0ea5e9" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">Sin datos.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Estilos más populares */}
+              <Card>
+                <CardHeader>
+                  <div className="flex justify-between items-center gap-2">
+                    <CardTitle>Estilos más populares</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Select value={topStyles} onValueChange={setTopStyles}>
+                        <SelectTrigger className="w-[130px]" size="sm">
+                          <SelectValue placeholder="Top" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="5">Top 5</SelectItem>
+                          <SelectItem value="10">Top 10</SelectItem>
+                          <SelectItem value="20">Top 20</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => downloadCsv("estilos-populares.csv", ["style", "total"], topStylesData)}
+                      >
+                        Exportar CSV
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {topStylesData.length ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={topStylesData.map((item) => ({
+                            name: item.style,
+                            value: item.total,
+                          }))}
+                          dataKey="value"
+                          nameKey="name"
+                          outerRadius={120}
+                          fill="#0ea5e9"
+                          label={({ name }) => name}
+                          labelLine={false}
+                          isAnimationActive={false}
+                        >
+                          {topStylesData.map((_, i) => (
+                            <Cell key={i} fill="#0ea5e9" />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">Sin datos.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Actividad mensual */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Actividad mensual</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {Array.isArray(activity?.monthlyCuts) && activity.monthlyCuts.length ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <LineChart data={activity.monthlyCuts}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip />
+                        <Line
+                          type="monotone"
+                          dataKey="total"
+                          stroke="#0ea5e9"
+                          strokeWidth={2}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">Sin datos.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Barberos activos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Barberos activos</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {Array.isArray(activity?.activeBarbers) && activity.activeBarbers.length ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={activity.activeBarbers}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="barber" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="total" fill="#0ea5e9" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">Sin datos.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Clientes activos */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Clientes activos</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {Array.isArray(activity?.activeClients) && activity.activeClients.length ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <BarChart data={activity.activeClients}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="client" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="total" fill="#0ea5e9" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-muted-foreground text-sm">Sin datos.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
       </div>
-
-      <Separator />
-
-      {/* Cortes por barbero */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center gap-2">
-            <CardTitle>Cortes por barbero</CardTitle>
-            <div className="flex items-center gap-2">
-              <Select value={topBarbers} onValueChange={setTopBarbers}>
-                <SelectTrigger className="w-[130px]" size="sm">
-                  <SelectValue placeholder="Top" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">Top 5</SelectItem>
-                  <SelectItem value="10">Top 10</SelectItem>
-                  <SelectItem value="20">Top 20</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => downloadCsv("cortes-por-barbero.csv", ["barber", "totalCuts"], byBarberData)}
-              >
-                Exportar CSV
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {byBarberData.length ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={byBarberData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="barber" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="totalCuts" fill="#0ea5e9" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-muted-foreground text-sm">Sin datos.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Cortes por cliente */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center gap-2">
-            <CardTitle>Clientes con más cortes</CardTitle>
-            <div className="flex items-center gap-2">
-              <Select value={topClients} onValueChange={setTopClients}>
-                <SelectTrigger className="w-[130px]" size="sm">
-                  <SelectValue placeholder="Top" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">Top 5</SelectItem>
-                  <SelectItem value="10">Top 10</SelectItem>
-                  <SelectItem value="20">Top 20</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => downloadCsv("cortes-por-cliente.csv", ["client", "totalCuts"], byClientData)}
-              >
-                Exportar CSV
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {byClientData.length ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={byClientData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="client" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="totalCuts" fill="#0ea5e9" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-muted-foreground text-sm">Sin datos.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Estilos más populares */}
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center gap-2">
-            <CardTitle>Estilos más populares</CardTitle>
-            <div className="flex items-center gap-2">
-              <Select value={topStyles} onValueChange={setTopStyles}>
-                <SelectTrigger className="w-[130px]" size="sm">
-                  <SelectValue placeholder="Top" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="5">Top 5</SelectItem>
-                  <SelectItem value="10">Top 10</SelectItem>
-                  <SelectItem value="20">Top 20</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => downloadCsv("estilos-populares.csv", ["style", "total"], topStylesData)}
-              >
-                Exportar CSV
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {topStylesData.length ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={topStylesData.map((item) => ({
-                    name: item.style,
-                    value: item.total,
-                  }))}
-                  dataKey="value"
-                  nameKey="name"
-                  outerRadius={120}
-                  fill="#0ea5e9"
-                  label={({ name }) => name}
-                  labelLine={false}
-                  isAnimationActive={false}
-                >
-                  {topStylesData.map((_, i) => (
-                    <Cell key={i} fill="#0ea5e9" />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-muted-foreground text-sm">Sin datos.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Actividad mensual */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Actividad mensual</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {Array.isArray(activity?.monthlyCuts) && activity.monthlyCuts.length ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={activity.monthlyCuts}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip />
-                <Line
-                  type="monotone"
-                  dataKey="total"
-                  stroke="#0ea5e9"
-                  strokeWidth={2}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-muted-foreground text-sm">Sin datos.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Barberos activos */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Barberos activos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {Array.isArray(activity?.activeBarbers) && activity.activeBarbers.length ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={activity.activeBarbers}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="barber" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="total" fill="#0ea5e9" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-muted-foreground text-sm">Sin datos.</p>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Clientes activos */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Clientes activos</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {Array.isArray(activity?.activeClients) && activity.activeClients.length ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={activity.activeClients}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="client" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="total" fill="#0ea5e9" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-muted-foreground text-sm">Sin datos.</p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+    </>
   );
 }
+
