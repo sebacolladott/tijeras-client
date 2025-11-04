@@ -110,7 +110,7 @@ export default function Clients() {
           size="sm"
           onClick={() => navigate("/clients/new")}
         >
-          <PlusIcon /> Agregar
+          <PlusIcon /> Añadir
         </Button>
       </div>
 

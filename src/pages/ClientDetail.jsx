@@ -147,7 +147,7 @@ export default function ClientDetail() {
           </div>
           <Button onClick={() => navigate(`/clients/${id}/cuts/new`)}>
             <PlusIcon className="mr-1 w-4 h-4" />
-            Agregar
+            Añadir
           </Button>
         </div>
 

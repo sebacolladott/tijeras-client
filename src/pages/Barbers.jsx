@@ -103,7 +103,7 @@ export default function Barbers() {
           size="sm"
           onClick={() => navigate("/barbers/new")}
         >
-          <PlusIcon /> Agregar
+          <PlusIcon /> Añadir
         </Button>
       </div>
 
