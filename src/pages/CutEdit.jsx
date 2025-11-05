@@ -1,5 +1,7 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { useNavigate, useParams } from "react-router";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,6 +9,7 @@ import { toast } from "sonner";
 import axios from "@/lib/axios";
 import heic2any from "heic2any";
 import imageCompression from "browser-image-compression";
+import { Progress } from "@/components/ui/progress";
 
 import { Button } from "@/components/ui/button";
 import BackButton from "@/components/BackButton";
@@ -41,17 +44,26 @@ const schema = z.object({
   notes: z.string().optional(),
 });
 
+const API = import.meta.env.VITE_API_URL;
+
 export default function CutEdit() {
   const { id, cutId } = useParams();
   const navigate = useNavigate();
+  const fileInputRef = useRef(null);
+
+  const [barbers, setBarbers] = useState([]);
+  const [cutData, setCutData] = useState(null);
+  const [photos, setPhotos] = useState([]);
+  const [previewUrls, setPreviewUrls] = useState([]);
+  const [processedFiles, setProcessedFiles] = useState([]); // fotos ya comprimidas
+  const [progress, setProgress] = useState(0);
+
   const form = useForm({
     resolver: zodResolver(schema),
     defaultValues: { barberId: "", style: "", notes: "" },
   });
-  const [barbers, setBarbers] = useState([]);
-  const [photos, setPhotos] = useState([]);
-  const fileInputRef = useRef(null);
 
+  // ---------- Cargar datos ----------
   useEffect(() => {
     (async () => {
       try {
@@ -59,35 +71,37 @@ export default function CutEdit() {
           axios.get("/barbers"),
           axios.get(`/cuts/${cutId}`),
         ]);
+
         setBarbers(barbersRes.data.data || []);
-        const cut = cutRes.data;
-        setPhotos(cut.photos || []);
-        form.reset({
-          barberId: cut.barberId || "",
-          style: cut.style || "",
-          notes: cut.notes || "",
-        });
+        setCutData(cutRes.data);
+        setPhotos(cutRes.data.photos || []);
       } catch {
         toast.error("Error al cargar datos del corte");
         navigate(`/clients/${id}`);
       }
     })();
-  }, [cutId, form, navigate, id]);
+  }, [cutId, id, navigate]);
+
+  useEffect(() => {
+    if (barbers.length && cutData) {
+      form.reset({
+        barberId: cutData.barberId || "",
+        style: cutData.style || "",
+        notes: cutData.notes || "",
+      });
+    }
+  }, [barbers, cutData, form]);
 
   // ---------- Normaliza HEIC ----------
   async function normalizeFile(file) {
-    if (
-      file.type === "image/heic" ||
-      file.name.toLowerCase().endsWith(".heic")
-    ) {
+    if (file.type.includes("heic")) {
       try {
         const blob = await heic2any({ blob: file, toType: "image/jpeg" });
-        return new File([blob], file.name.replace(/\.heic$/, ".jpg"), {
+        return new File([blob], file.name.replace(/\.heic$/i, ".jpg"), {
           type: "image/jpeg",
         });
-      } catch (e) {
-        console.warn("Error convirtiendo HEIC:", e);
-        return file;
+      } catch {
+        toast.error(`Error convirtiendo ${file.name}`);
       }
     }
     return file;
@@ -95,19 +109,54 @@ export default function CutEdit() {
 
   // ---------- Compresión ----------
   async function compressImage(file) {
-    const options = {
-      maxSizeMB: 0.6,
-      maxWidthOrHeight: 1280,
-      useWebWorker: true,
-      fileType: "image/webp",
-    };
     try {
-      return await imageCompression(file, options);
-    } catch (err) {
-      console.error("Error al comprimir:", err);
+      return await imageCompression(file, {
+        maxSizeMB: 0.6,
+        maxWidthOrHeight: 1280,
+        useWebWorker: true,
+        fileType: "image/webp",
+      });
+    } catch {
+      toast.error(`Error al comprimir ${file.name}`);
       return file;
     }
   }
+
+  // ---------- Manejar nuevas fotos ----------
+  const handleFilesChange = async (e) => {
+    const selected = Array.from(e.target.files);
+    const existing = photos.filter((p) => !p._deleted);
+    const available = 3 - existing.length;
+
+    if (available <= 0) {
+      toast.error("Ya hay 3 fotos, eliminá alguna primero");
+      e.target.value = "";
+      return;
+    }
+
+    const limited = selected.slice(0, available);
+    previewUrls.forEach((u) => URL.revokeObjectURL(u));
+    setPreviewUrls([]);
+    setProcessedFiles([]);
+
+    setProgress(10);
+    const total = limited.length;
+    const newPreviews = [];
+    const processed = [];
+
+    for (let i = 0; i < total; i++) {
+      setProgress(((i + 1) / total) * 70);
+      const normalized = await normalizeFile(limited[i]);
+      const compressed = await compressImage(normalized);
+      processed.push(compressed);
+      newPreviews.push(URL.createObjectURL(compressed));
+    }
+
+    setProcessedFiles(processed);
+    setPreviewUrls(newPreviews);
+    setProgress(100);
+    setTimeout(() => setProgress(0), 800);
+  };
 
   // ---------- Envío ----------
   const onSubmit = async (data) => {
@@ -116,50 +165,33 @@ export default function CutEdit() {
     formData.append("style", data.style);
     if (data.notes) formData.append("notes", data.notes);
 
-    const removed = photos.filter((p) => p._deleted);
-    removed.forEach((p) => formData.append("removePhotos[]", p.id));
-
-    const files = fileInputRef.current?.files;
-    let totalSize = 0;
-
-    if (files && files.length > 0) {
-      if (files.length > 3) {
-        toast.error("Solo podés subir hasta 3 fotos nuevas");
-        return;
-      }
-
-      const processed = [];
-      for (const file of files) {
-        try {
-          const normalized = await normalizeFile(file);
-          const compressed = await compressImage(normalized);
-          totalSize += compressed.size;
-
-          if (totalSize > 5 * 1024 * 1024) {
-            toast.error("⚠️ Superás el límite total de 5 MB");
-            break;
-          }
-
-          formData.append(
-            "photos",
-            compressed,
-            `${file.name.split(".")[0]}.webp`
-          );
-          processed.push(compressed);
-        } catch (err) {
-          console.error("❌ Error procesando imagen:", file.name, err);
-          toast.error(`No se pudo procesar "${file.name}"`);
-        }
-      }
-
-      if (processed.length) {
-        toast.info(
-          `📸 ${processed.length} imagen${
-            processed.length > 1 ? "es" : ""
-          } lista${processed.length > 1 ? "s" : ""}`
-        );
-      }
+    const kept = photos.filter((p) => !p._deleted);
+    const total = kept.length + processedFiles.length;
+    if (total > 3) {
+      toast.error("Máximo 3 fotos por corte");
+      return;
     }
+
+    // Reincorporar fotos viejas
+    await Promise.all(
+      kept.map(async (p) => {
+        try {
+          const res = await fetch(`${API}/cuts/${cutId}/photos/${p.id}/data`, {
+            credentials: "include",
+          });
+          const blob = await res.blob();
+          const file = new File([blob], `${p.id}.webp`, { type: blob.type });
+          formData.append("photos", file);
+        } catch {
+          toast.warning(`No se pudo recuperar ${p.id}`);
+        }
+      })
+    );
+
+    // Agregar nuevas fotos ya comprimidas
+    processedFiles.forEach((f) =>
+      formData.append("photos", f, `${f.name.split(".")[0]}.webp`)
+    );
 
     await toast.promise(
       axios.put(`/cuts/${cutId}`, formData, {
@@ -172,18 +204,19 @@ export default function CutEdit() {
       }
     );
 
+    fileInputRef.current.value = "";
+    previewUrls.forEach((u) => URL.revokeObjectURL(u));
+    setPreviewUrls([]);
+    setProcessedFiles([]);
     navigate(`/clients/${id}`);
   };
 
-  // ---------- Marcar para eliminar ----------
-  const togglePhotoDelete = (photoId) => {
+  const togglePhotoDelete = (id) =>
     setPhotos((prev) =>
-      prev.map((p) => (p.id === photoId ? { ...p, _deleted: !p._deleted } : p))
+      prev.map((p) => (p.id === id ? { ...p, _deleted: !p._deleted } : p))
     );
-  };
 
-  const API = import.meta.env.VITE_API_URL;
-
+  // ---------- Render ----------
   return (
     <div className="space-y-8 max-w-md">
       <BackButton fallback={`/clients/${id}`} />
@@ -198,82 +231,79 @@ export default function CutEdit() {
           <FieldDescription>Actualizá los datos del corte.</FieldDescription>
 
           <FieldGroup className="space-y-6 mt-4">
-            {/* ---------- Barbero ---------- */}
+            {/* Barbero */}
             <Field>
               <FieldLabel>Barbero *</FieldLabel>
-              <Select
-                value={form.watch("barberId")}
-                onValueChange={(v) => form.setValue("barberId", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Seleccioná un barbero" />
-                </SelectTrigger>
-                <SelectContent>
-                  {barbers.length ? (
-                    barbers.map((b) => (
-                      <SelectItem key={b.id} value={String(b.id)}>
-                        {b.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="p-2 text-muted-foreground text-sm">
-                      No hay barberos registrados
-                    </div>
-                  )}
-                </SelectContent>
-              </Select>
+              <Controller
+                control={form.control}
+                name="barberId"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Seleccioná un barbero" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {barbers.length ? (
+                        barbers.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="p-2 text-muted-foreground text-sm">
+                          No hay barberos
+                        </div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
               <FieldError>{form.formState.errors.barberId?.message}</FieldError>
             </Field>
 
-            {/* ---------- Estilo ---------- */}
+            {/* Estilo */}
             <Field>
               <FieldLabel>Estilo *</FieldLabel>
               <Textarea
                 {...form.register("style")}
-                placeholder="Ej: Fade medio con navaja"
+                placeholder="Ej: Fade medio"
               />
               <FieldError>{form.formState.errors.style?.message}</FieldError>
             </Field>
 
-            {/* ---------- Notas ---------- */}
+            {/* Notas */}
             <Field>
               <FieldLabel>Notas</FieldLabel>
               <Input {...form.register("notes")} placeholder="Opcional" />
-              <FieldError>{form.formState.errors.notes?.message}</FieldError>
             </Field>
 
-            {/* ---------- Fotos actuales ---------- */}
-            {photos.length > 0 ? (
+            {/* Fotos actuales */}
+            {photos.length > 0 && (
               <Field>
                 <FieldLabel>Fotos actuales</FieldLabel>
-
                 <PhotoProvider>
-                  <div className="gap-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4">
-                    {photos.map((photo) => {
-                      const url = `${API}/cuts/${cutId}/photos/${photo.id}/data`;
-
+                  <div className="gap-3 grid grid-cols-2 sm:grid-cols-3">
+                    {photos.map((p) => {
+                      const url = `${API}/cuts/${cutId}/photos/${p.id}/data`;
                       return (
-                        <div key={photo.id} className="group relative">
+                        <div key={p.id} className="group relative">
                           <PhotoView src={url}>
                             <img
                               src={url}
-                              alt="Foto del corte"
-                              className={`group-hover:opacity-90 border rounded-md w-full object-cover aspect-square transition cursor-pointer ${
-                                photo._deleted
+                              alt=""
+                              className={`border rounded-md aspect-square object-cover transition ${
+                                p._deleted
                                   ? "opacity-50 border-destructive"
                                   : ""
                               }`}
                             />
                           </PhotoView>
-
                           <Button
                             size="icon"
-                            variant={
-                              photo._deleted ? "secondary" : "destructive"
-                            }
+                            variant={p._deleted ? "secondary" : "destructive"}
                             className="top-1 right-1 absolute opacity-90 w-6 h-6"
-                            onClick={() => togglePhotoDelete(photo.id)}
-                            title={photo._deleted ? "Deshacer" : "Eliminar"}
+                            onClick={() => togglePhotoDelete(p.id)}
+                            title={p._deleted ? "Deshacer" : "Eliminar"}
                           >
                             <Trash2Icon className="w-3 h-3" />
                           </Button>
@@ -282,16 +312,13 @@ export default function CutEdit() {
                     })}
                   </div>
                 </PhotoProvider>
-
                 <FieldDescription>
                   Tocá el botón rojo para eliminar o deshacer.
                 </FieldDescription>
               </Field>
-            ) : (
-              <p className="text-muted-foreground text-sm italic">Sin fotos</p>
             )}
 
-            {/* ---------- Fotos nuevas ---------- */}
+            {/* Fotos nuevas */}
             <Field>
               <FieldLabel>Fotos nuevas</FieldLabel>
               <Input
@@ -299,33 +326,47 @@ export default function CutEdit() {
                 type="file"
                 accept="image/*,.heic,.heif"
                 multiple
-                onChange={(e) => {
-                  if (e.target.files.length > 3) {
-                    toast.error("Solo podés subir hasta 3 fotos");
-                    e.target.value = "";
-                  }
-                }}
+                onChange={handleFilesChange}
               />
               <FieldDescription>
-                Podés subir hasta 3 nuevas imágenes (HEIC, JPG, PNG, WebP).
+                Hasta 3 imágenes en total (HEIC, JPG, PNG, WebP)
               </FieldDescription>
+
+              {/* Barra de progreso */}
+              {progress > 0 && (
+                <div className="mt-2">
+                  <Progress value={progress} className="w-full" />
+                  <p className="mt-1 text-muted-foreground text-xs text-center">
+                    {progress < 100
+                      ? "Procesando imágenes..."
+                      : "✅ Imágenes listas para subir"}
+                  </p>
+                </div>
+              )}
+
+              {previewUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {previewUrls.map((u, i) => (
+                    <img
+                      key={i}
+                      src={u}
+                      className="border rounded w-24 h-24 object-cover"
+                    />
+                  ))}
+                </div>
+              )}
             </Field>
           </FieldGroup>
         </FieldSet>
 
         <div className="flex gap-2 pt-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="w-28"
-            onClick={() => navigate(-1)}
-          >
+          <Button type="button" variant="outline" onClick={() => navigate(-1)}>
             Cancelar
           </Button>
           <Button
             type="submit"
-            className="w-28"
             disabled={form.formState.isSubmitting}
+            className="min-w-28"
           >
             {form.formState.isSubmitting ? "Guardando..." : "Guardar"}
           </Button>

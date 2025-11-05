@@ -3,6 +3,7 @@ import axios from "axios";
 // --- Configuración global de Axios ---
 axios.defaults.baseURL = import.meta.env.VITE_API_URL?.trim(); // 🔥 elimina saltos o espacios
 axios.defaults.withCredentials = true; // envía cookies automáticamente
+axios.defaults.timeout = 0;
 
 // --- Interceptor de respuesta ---
 axios.interceptors.response.use(
